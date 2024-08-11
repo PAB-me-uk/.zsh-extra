@@ -12,6 +12,7 @@ if [[ -z "${USER}" ]]; then
   return
 fi
 
+SCRIPT_DIRECTORY="${0:A:h}"
 
 # History configuration.
 
@@ -43,6 +44,9 @@ autoload -Uz compinit
 source "${HOME}/.zsh/zsh-autosuggestions/zsh-autosuggestions.zsh"
 
 # Prompt config.
+if [ -n "$(git -C "${SCRIPT_DIRECTORY}" status --porcelain)" ]; then
+  ZSH_EXTRA_DIRTY="%F{red}!!!.zsh-extra is dirty!!!"
+fi
 
 ## Load version control information.
 autoload -Uz vcs_info
@@ -54,7 +58,7 @@ PROMPT='%n in ${PWD/#$HOME/~} ${vcs_info_msg_0_} > '
 setopt prompt_subst
 DIVIDER='%F{green}|%F{blue}'
 COLON=':%F{cyan}'
-PROMPT="%K{235}${DIVIDER}%F{cyan}%T${DIVIDER}path${COLON}%~${DIVIDER}aws${COLON}\${AWSUME_PROFILE}${DIVIDER}git${COLON}\${vcs_info_msg_0_}${DIVIDER}?${COLON}%?${DIVIDER}
+PROMPT="%K{235}${DIVIDER}%F{cyan}%T${DIVIDER}path${COLON}%~${DIVIDER}aws${COLON}\${AWSUME_PROFILE}${DIVIDER}git${COLON}\${vcs_info_msg_0_}${DIVIDER}?${COLON}%?${DIVIDER}${ZSH_EXTRA_DIRTY}
 %k%F{green}$%f "
 
 # Aliases.

@@ -1,0 +1,83 @@
+if [[ ! -z "${IMAGE_PYTHON_VERSION}" ]]; then
+  return
+fi
+
+if [[ -z "${HOME}" ]]; then
+  echo "HOME is not set"
+  return
+fi
+
+if [[ -z "${USER}" ]]; then
+  echo "USER is not set"
+  return
+fi
+
+
+# History configuration.
+
+HISTFILE="${HOME}/.histfile"
+HISTSIZE=10000
+SAVEHIST=10000
+setopt HIST_FCNTL_LOCK
+setopt HIST_IGNORE_DUPS
+setopt HIST_IGNORE_SPACE
+unsetopt HIST_EXPIRE_DUPS_FIRST
+setopt SHARE_HISTORY
+unsetopt EXTENDED_HISTORY
+
+# Keybinding.
+
+bindkey -e # Emacs mode change to -v for vim mode.
+
+
+# Autosuggestions
+
+if [ ! -d "${HOME}/.zsh/zsh-autosuggestions" ]; then
+  echo Installing zsh-autosuggestions
+  git clone https://github.com/zsh-users/zsh-autosuggestions "${HOME}/.zsh/zsh-autosuggestions"
+fi
+## Configure auto completions.
+zstyle :compinstall filename '/home/dev/.zshrc'
+autoload -Uz compinit
+## Add autosuggestions.
+source "${HOME}/.zsh/zsh-autosuggestions/zsh-autosuggestions.zsh"
+
+# Prompt config.
+
+## Load version control information.
+autoload -Uz vcs_info
+precmd() { vcs_info }
+## Format the vcs_info_msg_0_ variable.
+zstyle ':vcs_info:git:*' formats '%b'
+## Set up the prompt (with git branch name).
+PROMPT='%n in ${PWD/#$HOME/~} ${vcs_info_msg_0_} > '
+setopt prompt_subst
+DIVIDER='%F{green}|%F{blue}'
+COLON=':%F{cyan}'
+PROMPT="%K{235}${DIVIDER}%F{cyan}%T${DIVIDER}path${COLON}%~${DIVIDER}aws${COLON}\${AWSUME_PROFILE}${DIVIDER}git${COLON}\${vcs_info_msg_0_}${DIVIDER}?${COLON}%?${DIVIDER}
+%k%F{green}$%f "
+
+# Aliases.
+
+if [[ "${VSCODE_GIT_ASKPASS_MAIN}" == *"insiders"* ]]; then
+  alias code="code-insiders"
+fi
+
+# Devbox configuration.
+if command -v devbox &> /dev/null; then
+  eval "$(devbox global shellenv  --init-hook)"
+fi
+
+# eval "$(ssh-agent -s)"
+
+compinit # Must be before nvm bash completion.
+
+if [[ -d "${HOME}/.nvm" ]]; then
+  export NVM_DIR="${HOME}/.nvm"
+  [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
+  [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
+fi
+
+# Exports
+
+export EDITOR="code -w"

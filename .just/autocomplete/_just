@@ -1,0 +1,259 @@
+#compdef just
+
+autoload -U is-at-least
+
+# Toggle debugging on or off
+JUST_DEBUG=0
+
+_just_debug() {
+    if [[ $JUST_DEBUG -eq 1 ]]; then
+        echo "Debug: $*" >&2
+    fi
+}
+
+_just() {
+    _just_debug "Entering _just function"
+    typeset -A opt_args
+    typeset -a _arguments_options
+    local ret=1
+
+    if is-at-least 5.2; then
+        _arguments_options=(-s -S -C)
+    else
+        _arguments_options=(-s -C)
+    fi
+
+    local context curcontext="$curcontext" state line
+    local justfile=""
+    local global_justfile=""
+    local common=(
+        '--chooser=[Override binary invoked by `--choose`]: : ' \
+        '--color=[Print colorful output]: :(auto always never)' \
+        '--command-color=[Echo recipe lines in <COMMAND-COLOR>]: :(black blue cyan green purple red yellow)' \
+        '--dump-format=[Dump justfile as <FORMAT>]:FORMAT:(just json)' \
+        '--list-heading=[Print <TEXT> before list]:TEXT: ' \
+        '--list-prefix=[Print <TEXT> before each list item]:TEXT: ' \
+        '-f+[Use <JUSTFILE> as justfile]:justfile:_files' \
+        '--justfile=[Use <JUSTFILE> as justfile]:justfile:_files' \
+        '-g+[Use <GLOBAL-JUSTFILE> as global justfile]:global-justfile:_files' \
+        '--global-justfile=[Use <GLOBAL-JUSTFILE> as global justfile]:global-justfile:_files' \
+        '*--set=[Override <VARIABLE> with <VALUE>]: :(_just_variables)' \
+        '--shell=[Invoke <SHELL> to run recipes]: : ' \
+        '*--shell-arg=[Invoke shell with <SHELL-ARG> as an argument]: : ' \
+        '-d+[Use <WORKING-DIRECTORY> as working directory. --justfile must also be set]: :_files' \
+        '--working-directory=[Use <WORKING-DIRECTORY> as working directory. --justfile must also be set]: :_files' \
+        '*-c+[Run an arbitrary command with the working directory, `.env`, overrides, and exports set]: : ' \
+        '*--command=[Run an arbitrary command with the working directory, `.env`, overrides, and exports set]: : ' \
+        '--completions=[Print shell completion script for <SHELL>]:SHELL:(bash elvish fish nushell powershell zsh)' \
+        '()-l+[List available recipes]' \
+        '()--list=[List available recipes]' \
+        '-s+[Show recipe at <PATH>]: :(_just_commands)' \
+        '--show=[Show recipe at <PATH>]: :(_just_commands)' \
+        '(-E --dotenv-path)--dotenv-filename=[Search for environment file named <DOTENV-FILENAME> instead of `.env`]: : ' \
+        '-E+[Load <DOTENV-PATH> as environment file instead of searching for one]: :_files' \
+        '--dotenv-path=[Load <DOTENV-PATH> as environment file instead of searching for one]: :_files' \
+        '--timestamp-format=[Timestamp format string]: : ' \
+        '--check[Run `--fmt` in '\''check'\'' mode. Exits with 0 if justfile is formatted correctly. Exits with 1 and prints a diff if formatting is required.]' \
+        '--yes[Automatically confirm all recipes.]' \
+        '(-q --quiet)-n[Print what just would do without doing it]' \
+        '(-q --quiet)--dry-run[Print what just would do without doing it]' \
+        '--highlight[Highlight echoed recipe lines in bold]' \
+        '--list-submodules[List recipes in submodules]' \
+        '--no-aliases[Don'\''t show aliases in list]' \
+        '--no-deps[Don'\''t run recipe dependencies]' \
+        '--no-dotenv[Don'\''t load `.env` file]' \
+        '--no-highlight[Don'\''t highlight echoed recipe lines in bold]' \
+        '(-n --dry-run)-q[Suppress all output]' \
+        '(-n --dry-run)--quiet[Suppress all output]' \
+        '--shell-command[Invoke <COMMAND> with the shell used to run recipe lines and backticks]' \
+        '--clear-shell-args[Clear shell arguments]' \
+        '-u[Return list and summary entries in source order]' \
+        '--unsorted[Return list and summary entries in source order]' \
+        '--unstable[Enable unstable features]' \
+        '*-v[Use verbose output]' \
+        '*--verbose[Use verbose output]' \
+        '--changelog[Print changelog]' \
+        '--choose[Select one or more recipes to run using a binary chooser. If `--chooser` is not passed the chooser defaults to the value of $JUST_CHOOSER, falling back to `fzf`]' \
+        '--dump[Print justfile]' \
+        '-e[Edit justfile with editor given by $VISUAL or $EDITOR, falling back to `vim`]' \
+        '--edit[Edit justfile with editor given by $VISUAL or $EDITOR, falling back to `vim`]' \
+        '--evaluate[Evaluate and print all variables. If a variable name is given as an argument, only print that variable'\''s value.]' \
+        '--fmt[Format and overwrite justfile]' \
+        '--init[Initialize new justfile in project root]' \
+        '--groups[List recipe groups]' \
+        '--man[Print man page]' \
+        '--summary[List names of available recipes]' \
+        '--variables[List names of variables]' \
+        '--timestamp[Print recipe command timestamps]' \
+        '-h[Print help]' \
+        '--help[Print help]' \
+        '-V[Print version]' \
+        '--version[Print version]' \
+    )
+
+    _just_debug "Calling _arguments with options: ${_arguments_options[@]}"
+    _arguments "${_arguments_options[@]}" $common \
+        '1: :_just_commands' \
+        '*: :->args' \
+        && ret=0
+
+    _just_debug "_arguments returned $ret"
+
+    case $state in
+        args)
+            curcontext="${curcontext%:*}-${words[2]}:"
+
+            local lastarg=${words[${#words}]}
+            local recipe
+
+            _just_debug "Current arguments: ${words[*]}"
+
+            local cmds; cmds=(
+                ${(s: :)$(_call_program commands just --summary)}
+            )
+
+            _just_debug "Retrieved commands: ${cmds[*]}"
+
+            # Find first recipe name
+            for ((i = 2; i < $#words; i++ )); do
+                if [[ ${cmds[(I)${words[i]}]} -gt 0 ]]; then
+                    recipe=${words[i]}
+                    break
+                fi
+            done
+
+            _just_debug "Found recipe: $recipe"
+
+            if [[ $lastarg = */* ]]; then
+                _arguments -s -S $common '*:: :_files'
+            elif [[ $lastarg = *=* ]]; then
+                _message "value"
+            elif [[ $recipe ]]; then
+                _message "`just --show $recipe`"
+            else
+                _arguments -s -S $common '*:: :_just_commands'
+            fi
+        ;;
+    esac
+
+    return ret
+}
+
+(( $+functions[_just_commands] )) ||
+_just_commands() {
+    _just_debug "Entering _just_commands function"
+    [[ $PREFIX = -* ]] && return 1
+    integer ret=1
+
+    local justfile=""
+    local global_justfile=""
+    for ((i = 1; i < $#words; i++)); do
+        if [[ ${words[i]} == "-f" || ${words[i]} == "--justfile" ]]; then
+            justfile=${words[i+1]}
+        elif [[ ${words[i]} == "-g" || ${words[i]} == "--global-justfile" ]]; then
+            global_justfile=${words[i+1]}
+        fi
+    done
+
+    _just_debug "Using justfile: $justfile"
+    _just_debug "Using global justfile: $global_justfile"
+
+    local variables_command="just --variables"
+    local list_command="just --list"
+
+    if [[ -n $justfile ]]; then
+        variables_command+=" -f $justfile"
+        list_command+=" -f $justfile"
+    elif [[ -n $global_justfile ]]; then
+        variables_command+=" -g $global_justfile"
+        list_command+=" -g $global_justfile"
+    fi
+
+    _just_debug "Executing command: $variables_command"
+    local variables_output
+    variables_output=$(eval $variables_command 2>&1)
+    _just_debug "Command output: $variables_output"
+    local variables; variables=(
+        ${(s: :)variables_output}
+    )
+
+    _just_debug "Executing command: $list_command"
+    local commands_output
+    commands_output=$(eval $list_command 2>&1)
+    if [[ $commands_output == *"No justfile found"* ]]; then
+        commands_output=""
+    fi
+    _just_debug "Command output: $commands_output"
+    local commands; commands=(
+        ${${${(M)"${(f)commands_output}":#    *}/ ##/}/ ##/:Args: }
+    )
+
+    _just_debug "Variables: ${variables[*]}"
+    _just_debug "Commands: ${commands[*]}"
+
+    if compset -P '*='; then
+        case "${${words[-1]%=*}#*=}" in
+            *) _message 'value' && ret=0 ;;
+        esac
+    else
+        _describe -t variables 'variables' variables -qS "=" && ret=0
+        _describe -t commands 'just commands' commands "$@"
+    fi
+
+    _just_debug "_describe returned $ret"
+    return ret
+}
+
+if [ "$funcstack[1]" = "_just" ]; then
+    (( $+functions[_just_variables] )) ||
+_just_variables() {
+    _just_debug "Entering _just_variables function"
+    [[ $PREFIX = -* ]] && return 1
+    integer ret=1
+
+    local justfile=""
+    local global_justfile=""
+    for ((i = 1; i < $#words; i++)); do
+        if [[ ${words[i]} == "-f" || ${words[i]} == "--justfile" ]]; then
+            justfile=${words[i+1]}
+        elif [[ ${words[i]} == "-g" || ${words[i]} == "--global-justfile" ]]; then
+            global_justfile=${words[i+1]}
+        fi
+    done
+
+    _just_debug "Using justfile: $justfile"
+    _just_debug "Using global justfile: $global_justfile"
+
+    local variables_command="just --variables"
+    if [[ -n $justfile ]]; then
+        variables_command+=" -f $justfile"
+    elif [[ -n $global_justfile ]]; then
+        variables_command+=" -g $global_justfile"
+    fi
+
+    _just_debug "Executing command: $variables_command"
+    local variables_output
+    variables_output=$(eval $variables_command 2>&1)
+    _just_debug "Command output: $variables_output"
+    local variables; variables=(
+        ${(s: :)variables_output}
+    )
+
+    _just_debug "Variables: ${variables[*]}"
+
+    if compset -P '*='; then
+        case "${${words[-1]%=*}#*=}" in
+            *) _message 'value' && ret=0 ;;
+        esac
+    else
+        _describe -t variables 'variables' variables && ret=0
+    fi
+
+    _just_debug "_describe returned $ret"
+    return ret
+}
+
+_just "$@"
+else
+    compdef _just just
+fi

@@ -1,0 +1,102 @@
+alias gb='git branch'
+alias gf='git fetch --all --tags --prune'
+alias gfq='gf --quiet'
+alias gba='gfq && git branch -avv'
+alias gcsame='gc "$(git log --oneline --format=%B -n 1 HEAD | head -n 1)"'
+alias gcsp='gcs && gpu'
+alias gd='git diff > /tmp/diff.patch && nano /tmp/diff.patch'
+alias gdt='git difftool'
+alias gdts='git difftool --staged'
+alias glc='git log --oneline --format=%B -n 1 HEAD | head -n 1'
+alias gpl='gfq && git pull'
+alias gprune='git gc --prune=now && git remote prune origin'
+alias gpu='gpl && git push'
+alias gs='git status'
+alias gunignore='git update-index --no-assume-unchanged'
+alias gl='git log --oneline -n 10'
+alias gdeletebranches='git branch | grep -Ev "master|main|release-|\*" | xargs -I {} git branch -D {}'
+alias gsearch='git rev-list --all | xargs git grep '
+alias gco="git switch"
+alias gcb="git switch"
+alias gdm="git diff ..main"
+alias gdf="git diff --name-only ..main"
+alias gmm="gfq && git merge origin/main"
+alias gclean="git clean -i -fdx"
+
+function ga() {
+  git add $@ && \
+  gs
+}
+
+function gad() {
+  gs | awk '{if ($1 == "deleted:") print $2}' | while read -r i; do ga "$i"; done
+  gs
+}
+
+function gc() {
+  echo git commit -m \""$1"\"
+  git commit -m "$1"
+}
+
+function gcs() {
+  git log --oneline --format=%s -n 100 | grep -v "(#" | grep -v "^Merge" > /tmp/gcs.txt
+  message=$(cat -n /tmp/gcs.txt | sort --key=2.1 -b -u | sort -n | cut -c8- | fzf)
+  rm /tmp/gcs.txt
+  gc "${message}"
+}
+
+function gprs() {
+  git log --oneline --format=%s -n 100 | grep -v "(#" | grep -v "^Merge" > /tmp/gcs.txt
+  message=$(cat -n /tmp/gcs.txt | sort --key=2.1 -b -u | sort -n | cut -c8- | fzf)
+  rm /tmp/gcs.txt
+  gh pr create --body "" --title "${message}"
+}
+
+function gsw() {
+  gf
+  branch=$(git branch -a --format='%(refname:short)' | sed 's|^origin/||' | sort | uniq | grep -v HEAD | fzf)
+  git switch "${branch}"
+}
+
+function f() {
+  file=$(gdf | fzf)
+  code "${file}"
+}
+
+# function gcb() {
+#   git fetch --all --prune && \
+#   git checkout -B $1 origin/$1
+#  }
+
+# function gco() {
+#   git checkout $@
+# }
+
+function gnb() {
+  gfq && \
+  git branch $1 && \
+  git checkout $1 && \
+  git push -u origin $1 && \
+  gb
+}
+
+function gsmu() {
+  git submodule update --remote --recursive
+}
+
+function gr() {
+  selected=$(git status | grep "modified:\|deleted:" | sort | fzf | awk '{print $2}')
+  echo git checkout -- "${selected}"
+  git checkout -- "${selected}"
+  gs
+}
+
+function gdeletebranch() {
+  git push --delete origin $1 && \
+  git branch -D $1
+}
+
+function testing() {
+  git commit -m "$1"
+}
+

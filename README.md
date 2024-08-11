@@ -1,1 +1,1 @@
-# zsh-extra
+# .zsh-extra

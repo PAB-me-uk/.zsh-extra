@@ -1,4 +1,6 @@
 alias j='just'
-alias k='just --justfile "${HOME}/.zsh-extra/.just/.justfile"'
+
+alias c='just --justfile "${HOME}/.zsh-extra/.just/c/.justfile"'
+alias k='just --justfile "${HOME}/.zsh-extra/.just/k/.justfile"'
 
 fpath=("${HOME}/.zsh-extra/.just/autocomplete/" $fpath)

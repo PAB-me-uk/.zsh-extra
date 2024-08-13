@@ -132,8 +132,6 @@ create-dev-container container-name volume-name python-version extra-mounts="":
 create-dev-container-no-pull container-name volume-name python-version extra-mounts="":
   docker run --rm -it --env HOST_USER_HOME="${HOME}" --mount type=bind,source=/var/run/docker.sock,target=/var/run/docker.sock pabuk/dev-python:{{python-version}} /bin/zsh -c "NO_PULL=1 /home/dev/.local/bin/create-dev-container {{container-name}} {{volume-name}} {{python-version}} .zsh-extra {{extra-mounts}}"
 
-create-databricks-dev-container: (create-dev-container-no-pull "databricks" "databricks" "3.12-tf-1.9.2-tfl-0.44.1")
-
 stacks-list:
   aws cloudformation list-stacks --query "StackSummaries[].StackName" --no-paginate | jq -rc '.[]'
 

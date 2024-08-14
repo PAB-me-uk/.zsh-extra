@@ -192,3 +192,18 @@ backup-wsl:
 
 devbox-refresh:
   eval "$(devbox global shellenv --recompute)"
+
+# Switch git config to Nasstar
+git-config-nasstar:
+  git config user.name "Paul Burridge"
+  git config user.email "paul.burridge@nasstar.com"
+
+# Switch git config to Colibri
+git-config-colibri:
+  git config user.name "Paul Burridge"
+  git config user.email "paul.burridge@colibridigital.io"
+
+# Switch git config to personal
+git-config-personal:
+  git config user.name "PAB-me-uk"
+  git config user.email "github@pab.me.uk"

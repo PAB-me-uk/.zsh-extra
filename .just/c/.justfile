@@ -26,12 +26,22 @@ terragrunt command log-level=terraform-log-level extra-args="":
   set -eo pipefail
   export TF_LOG={{log-level}}
   export TERRAGRUNT_LOG_LEVEL={{log-level}}
-  eval "$(lpass show --notes databricks.com | awk '(! /^[ \t]*#/) && (! /^$/) { print "export", $0 }')"
-  env | grep '^TF_VAR_' | cut -d '=' -f 1 | awk '{print $0 " is set"}'
   if [[ "{{log-level}}" == "DEBUG" ]]; then
-    time terragrunt {{command}} --terragrunt-debug
+    time terragrunt {{command}} --terragrunt-non-interactive --terragrunt-debug
   else
-    time terragrunt {{command}} {{extra-args}}
+    time terragrunt {{command}} --terragrunt-non-interactive {{extra-args}}
+  fi
+
+[no-cd]
+terragrunt-run-all command log-level=terraform-log-level extra-args="":
+  #!/bin/bash
+  set -eo pipefail
+  export TF_LOG={{log-level}}
+  export TERRAGRUNT_LOG_LEVEL={{log-level}}
+  if [[ "{{log-level}}" == "DEBUG" ]]; then
+    time terragrunt --terragrunt-non-interactive run-all {{command}} --terragrunt-debug
+  else
+    time terragrunt --terragrunt-non-interactive run-all {{command}} {{extra-args}}
   fi
 
 terragrunt-console-with-plan: (terragrunt "console" terraform-log-level "-plan")
@@ -48,3 +58,7 @@ debug-using-terragrunt-var-file command log-level=terraform-log-level:
 
 create-calypso-dev-container name="calypso":
   just --justfile "${HOME}/.zsh-extra/.just/k/.justfile" create-dev-container-no-pull {{name}} {{name}} "3.12-tf-1.9.2-tfl-0.44.1"
+
+get-remote-state:
+  mkdir -p /workspace/tf-state
+  aws s3 cp s3://nasstar-demo-acc-play-tf-state-kzecg486/calypso /workspace/tf-state --recursive

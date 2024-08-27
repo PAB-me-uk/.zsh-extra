@@ -2,8 +2,12 @@
 # https://just.systems/man/en/
 
 workspace-path := "/workspace"
-project-name := "databricks-infrastructure"
 terraform-log-level := "INFO"
+aws-profile := "calypso-dev-us"
+terragrunt-flags := "--terragrunt-non-interactive --terragrunt-no-color"
+export AWS_PROFILE := aws-profile
+
+export TF_CLI_ARGS := "-no-color"
 
 # Default recipe, runs if you just type `just`.
 [private]
@@ -11,54 +15,62 @@ default:
   just --list --color always | less -R
 
 # Install dependencies
-install:
-  echo "Installing dependencies..."
-  gh auth login
-  gh extension install https://github.com/nektos/gh-act
+# install:
+#   echo "Installing dependencies..."
+#   gh auth login
+#   gh extension install https://github.com/nektos/gh-act
 
-lint:
-  echo "Linting..."
-  sudo -E /bin/bash -c "time gh act -W '.github/workflows/tf-checks.yaml'"
+# lint:
+#   echo "Linting..."
+#   sudo -E /bin/bash -c "time gh act -W '.github/workflows/tf-checks.yaml'"
 
 [no-cd]
-terragrunt command log-level=terraform-log-level extra-args="":
+tg command log-level=terraform-log-level extra-args="":
   #!/bin/bash
   set -eo pipefail
   export TF_LOG={{log-level}}
   export TERRAGRUNT_LOG_LEVEL={{log-level}}
   if [[ "{{log-level}}" == "DEBUG" ]]; then
-    time terragrunt {{command}} --terragrunt-non-interactive --terragrunt-debug
+    time terragrunt {{command}} {{terragrunt-flags}} --terragrunt-debug
   else
-    time terragrunt {{command}} --terragrunt-non-interactive {{extra-args}}
+    time terragrunt {{command}} {{terragrunt-flags}} {{extra-args}}
   fi
 
 [no-cd]
-terragrunt-run-all command log-level=terraform-log-level extra-args="":
+tg-run-all command log-level=terraform-log-level extra-args="":
   #!/bin/bash
   set -eo pipefail
   export TF_LOG={{log-level}}
   export TERRAGRUNT_LOG_LEVEL={{log-level}}
   if [[ "{{log-level}}" == "DEBUG" ]]; then
-    time terragrunt --terragrunt-non-interactive run-all {{command}} --terragrunt-debug
+    time terragrunt {{terragrunt-flags}} run-all {{command}} --terragrunt-debug
   else
-    time terragrunt --terragrunt-non-interactive run-all {{command}} {{extra-args}}
+    time terragrunt {{terragrunt-flags}} run-all {{command}} {{extra-args}}
   fi
 
-terragrunt-console-with-plan: (terragrunt "console" terraform-log-level "-plan")
+tg-console-with-plan: (tg "console" terraform-log-level "-plan")
 
 [no-cd]
-debug-using-terragrunt-var-file command log-level=terraform-log-level:
+tg-debug-using-var-file command log-level=terraform-log-level:
   #!/bin/bash
   set -eo pipefail
   export TF_LOG={{log-level}}
   export TERRAGRUNT_LOG_LEVEL={{log-level}}
-  eval "$(lpass show --notes databricks.com | awk '(! /^[ \t]*#/) && (! /^$/) { print "export", $0 }')"
-  env | grep '^TF_VAR_' | cut -d '=' -f 1 | awk '{print $0 " is set"}'
   terraform {{command}} -var-file=./terragrunt-debug.tfvars.json
 
 create-calypso-dev-container name="calypso":
   just --justfile "${HOME}/.zsh-extra/.just/k/.justfile" create-dev-container-no-pull {{name}} {{name}} "3.12-tf-1.9.2-tfl-0.44.1"
 
-get-remote-state:
+tf-state-get:
   mkdir -p /workspace/tf-state
-  aws s3 cp s3://nasstar-demo-acc-play-tf-state-kzecg486/calypso /workspace/tf-state --recursive
+  aws s3 cp --recursive s3://nonprod-terraform-state-a3kgzd7g /workspace/tf-state
+
+tf-state-list:
+  aws s3 ls s3://nonprod-terraform-state-a3kgzd7g --recursive
+
+tg-clean:
+  find /workspace/calypso -type d -name ".terragrunt-cache" -exec rm -rf {} \;
+
+aws-sso-login:
+  aws sso login
+

@@ -5,6 +5,7 @@ alias gba='gfq && git branch -avv'
 alias gcsame='gc "$(git log --oneline --format=%B -n 1 HEAD | head -n 1)"'
 alias gcsp='gcs && gpu'
 alias gd='git diff > /tmp/diff.patch && nano /tmp/diff.patch'
+alias gbl="git for-each-ref --format='%(refname:short) %(objectname)' refs/heads/"
 alias gdt='git difftool'
 alias gdts='git difftool --staged'
 alias glc='git log --oneline --format=%B -n 1 HEAD | head -n 1'

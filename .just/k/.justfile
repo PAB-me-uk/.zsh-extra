@@ -11,6 +11,10 @@ workspace-path := "/workspace"
 default:
   just --list --color always | less -R
 
+# Edit this .justfile
+edit:
+  code {{justfile()}}
+
 [no-cd] # Disable the default cd to the directory containing the justfile
 pwd:
   pwd

@@ -68,9 +68,10 @@ tg-debug-using-var-file command log-level=terraform-log-level:
   export TERRAGRUNT_LOG_LEVEL={{log-level}}
   terraform {{command}} -var-file=./terragrunt-debug.tfvars.json
 
-# Create a new calypso dev container
+# Create a new Calypso dev container
 create-calypso-dev-container name="calypso":
-  just --justfile "${HOME}/.zsh-extra/.just/k/.justfile" create-dev-container-no-pull {{name}} {{name}} "3.12-tf-1.9.2-tfl-0.44.1"
+  # j build-image 3.12 "" "1.9.5" "0.53.0" "0.66.9" # in dev-docker-image repo
+  just --justfile "${HOME}/.zsh-extra/.just/k/.justfile" create-dev-container-no-pull {{name}} {{name}} "3.12-tf-1.9.5-tfl-0.53.0-tg-0.66.9"
 
 # Terraform - Get state files from S3 bucket
 tf-state-get:
@@ -89,7 +90,15 @@ tg-clean:
 
 # Terragrunt - List all terragrunt.hcl files
 tg-list:
-  find /workspace/calypso/environment-definitions . -name "terragrunt.hcl" | grep -v "\.terragrunt-cache"
+  find /workspace/calypso/environment-definitions . -name "terragrunt.hcl" -not -path "*/.terragrunt-cache/*"
+
+# Terragrunt - List all terragrunt.hcl files printing relative paths
+tg-list-relative:
+  find /workspace/calypso/environment-definitions . -name "terragrunt.hcl" -not -path "*/.terragrunt-cache/*" -printf "%P\n"
+
+# Terragrunt - List all hcl files printing relative paths
+tg-list-relative-hcl:
+  find /workspace/calypso/environment-definitions . -name "*.hcl" -not -path "*/.terragrunt-cache/*" -printf "%P\n"
 
 # Terragrunt - Generate CD command and add to clipboard
 tg-cd:
@@ -108,6 +117,14 @@ tf-create-module name:
 aws-sso-login:
   aws sso login
 
+# AWS SSO login
+azure-sso-login:
+  az login --use-device-code
+
+# AWS SSO login
+azure-sso-login-tenant-level:
+  az login --use-device-code --allow-no-subscriptions
+
 # Format all terraform and terragrunt files
 format:
   #! /bin/bash
@@ -121,9 +138,10 @@ lint:
   #! /bin/bash
   set -eox pipefail
   cd /workspace/calypso
-  terraform fmt -recursive -check
   terragrunt hclfmt --terragrunt-check
-
+  terraform fmt -recursive -check
+  tflint --recursive
+  tfsec --exclude-downloaded-modules
 # Git - Tag branch
 [no-cd]
 git-branch-tag version:
@@ -136,3 +154,29 @@ git-branch-tag-force version:
   git push origin :refs/tags/{{version}}
   git tag -a {{version}} -m "Version {{version}}" -f
   git push origin {{version}}
+
+# Install dependencies
+install:
+  grep -qF 'export AWS_PROFILE=calypso-dev-us' ~/.zshrc || echo '\nexport AWS_PROFILE=calypso-dev-us' >> ~/.zshrc
+  code --install-extension fredwangwang.vscode-hcl-format
+  code --install-extension moshfeu.compare-folders
+  code --install-extension ms-azure-devops.azure-pipelines
+
+# Install Terragrunt
+install-terragrunt version:
+  sudo wget -O /usr/local/bin/terragrunt -q https://github.com/gruntwork-io/terragrunt/releases/download/v{{version}}/terragrunt_linux_amd64
+  sudo chmod +x /usr/local/bin/terragrunt
+  terragrunt --version
+
+# Install Terraform
+install-terraform version:
+  #! /bin/bash
+  set -eox pipefail
+  mkdir -p /tmp/install-terraform
+  cd /tmp/install-terraform
+  wget -O terraform.zip -q https://releases.hashicorp.com/terraform/{{version}}/terraform_{{version}}_linux_amd64.zip
+                           #https://releases.hashicorp.com/terraform/1.9.2/terraform_1.9.2_linux_amd64.zip
+  unzip -qo terraform.zip
+  sudo mv -f terraform /usr/bin/
+  sudo chmod +x /usr/bin/terraform
+  rm -rf /tmp/install-terraform

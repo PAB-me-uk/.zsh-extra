@@ -15,7 +15,6 @@ alias gpu='gpl && git push'
 alias gs='git status'
 alias gunignore='git update-index --no-assume-unchanged'
 alias gl='git log --oneline -n 10'
-alias gdeletebranches='git branch | grep -Ev "master|main|release-|\*" | xargs -I {} git branch -D {}'
 alias gsearch='git rev-list --all | xargs git grep '
 alias gco="git switch"
 alias gcb="git switch"
@@ -23,6 +22,10 @@ alias gdm="git diff ..main"
 alias gdf="git diff --name-only ..main"
 alias gmm="gfq && git merge origin/main"
 alias gclean="git clean -i -fdx"
+alias grebasemain="git rebase -i origin/main"
+alias gforcepush="git push origin $(git rev-parse --abbrev-ref HEAD) --force"
+alias gprunebranches='git fetch --prune && git branch -vv | grep ": gone]" | awk "{print \$1}" | xargs -r git branch -d'
+
 
 function ga() {
   git add $@ && \
@@ -95,6 +98,11 @@ function gr() {
 function gdeletebranch() {
   git push --delete origin $1 && \
   git branch -D $1
+}
+
+function gdeletetag() {
+  git tag -d "$1" && \
+  git push origin --delete "$1"
 }
 
 function testing() {

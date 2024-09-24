@@ -1,0 +1,15 @@
+function find-up () {
+  local search_path=$(pwd)
+  local target=$1
+
+  while [[ "$search_path" != "/" ]]; do
+    if [[ -e "$search_path/$target" ]]; then
+      echo "$search_path/$target"
+      return 0
+    fi
+    search_path=$(dirname "$search_path")
+  done
+
+  echo "File or directory '$target' not found" >&2
+  return 1
+}

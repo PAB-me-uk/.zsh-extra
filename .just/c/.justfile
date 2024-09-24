@@ -15,16 +15,6 @@ export TF_CLI_ARGS := "-no-color"
 default:
   just --list --color always | less -R
 
-# Install dependencies
-# install:
-#   echo "Installing dependencies..."
-#   gh auth login
-#   gh extension install https://github.com/nektos/gh-act
-
-# lint:
-#   echo "Linting..."
-#   sudo -E /bin/bash -c "time gh act -W '.github/workflows/tf-checks.yaml'"
-
 # Edit the current .justfile
 edit:
   code {{justfile()}}
@@ -87,18 +77,19 @@ tf-state-list:
 # Terragrunt - Clean terragrunt cache
 tg-clean:
   find /workspace/calypso -type d -name ".terragrunt-cache" -exec rm -rf {} \;
+  find /workspace/calypso -type d -name ".terraform" -exec rm -rf {} \;
 
 # Terragrunt - List all terragrunt.hcl files
 tg-list:
-  find /workspace/calypso/environment-definitions . -name "terragrunt.hcl" -not -path "*/.terragrunt-cache/*"
+  find /workspace/calypso/environment-definitions . -name "terragrunt.hcl" -not -path "*/.terragrunt-cache/*" | sort
 
 # Terragrunt - List all terragrunt.hcl files printing relative paths
 tg-list-relative:
-  find /workspace/calypso/environment-definitions . -name "terragrunt.hcl" -not -path "*/.terragrunt-cache/*" -printf "%P\n"
+  find /workspace/calypso/environment-definitions . -name "terragrunt.hcl" -not -path "*/.terragrunt-cache/*" -printf "%P\n" | sort
 
 # Terragrunt - List all hcl files printing relative paths
 tg-list-relative-hcl:
-  find /workspace/calypso/environment-definitions . -name "*.hcl" -not -path "*/.terragrunt-cache/*" -printf "%P\n"
+  find /workspace/calypso/environment-definitions . -name "*.hcl" -not -path "*/.terragrunt-cache/*" -not -name ".terraform.lock.hcl" -printf "%P\n" | sort
 
 # Terragrunt - Generate CD command and add to clipboard
 tg-cd:
@@ -136,11 +127,16 @@ format:
 # Lint files
 lint:
   #! /bin/bash
-  set -eox pipefail
+  set -ox pipefail
   cd /workspace/calypso
   terragrunt hclfmt --terragrunt-check
   terraform fmt -recursive -check
   tflint --recursive
+  cd /workspace/calypso/environment-definitions
+  tfsec --exclude-downloaded-modules
+  cd /workspace/calypso/platform_components
+  tfsec --exclude-downloaded-modules
+  cd /workspace/calypso/terraform-modules
   tfsec --exclude-downloaded-modules
 # Git - Tag branch
 [no-cd]
@@ -161,6 +157,7 @@ install:
   code --install-extension fredwangwang.vscode-hcl-format
   code --install-extension moshfeu.compare-folders
   code --install-extension ms-azure-devops.azure-pipelines
+  sudo apt install -y xclip
 
 # Install Terragrunt
 install-terragrunt version:
@@ -180,3 +177,56 @@ install-terraform version:
   sudo mv -f terraform /usr/bin/
   sudo chmod +x /usr/bin/terraform
   rm -rf /tmp/install-terraform
+
+# Install go
+install-go version:
+  #! /bin/bash
+  set -eox pipefail
+  wget -O /tmp/go.tar.gz -q https://go.dev/dl/go{{version}}.linux-amd64.tar.gz
+  sudo rm -rf /usr/local/go
+  sudo tar -C /usr/local -xzf /tmp/go.tar.gz
+  rm /tmp/go.tar.gz
+  if ! grep -Fxq 'export PATH=$PATH:/usr/local/go/bin' ~/.zshrc; then
+    echo 'export PATH=$PATH:/usr/local/go/bin' >> ~/.zshrc
+  fi
+  . ~/.zshrc
+  go version
+
+# Switch source references to absolute path
+switch-source-to-absolute-path:
+  #! /bin/bash
+  set -eo pipefail
+  REPOS_PARENT_DIR=/workspace/calypso
+  cd ${REPOS_PARENT_DIR}
+  find \( -name "*.tf" -o -name "*.hcl" \) -exec sed -i -E "s|^(\s+)source(\s+)=(\s+)\"git::ssh://git@ssh.dev.azure.com/v3/texthelp-ltd/Data%20Hub/([^?]+)([^\"]+).*$|\1source\2=\3\"${REPOS_PARENT_DIR}/\4\" # \5|g" {} \;
+
+# Switch source references to git
+switch-source-to-git:
+  #! /bin/bash
+  set -eo pipefail
+  REPOS_PARENT_DIR=/workspace/calypso
+  cd ${REPOS_PARENT_DIR}
+  find \( -name "*.tf" -o -name "*.hcl" \) -exec sed -i -E "s|^(\s+)source(\s+)=(\s+)\"${REPOS_PARENT_DIR}/([^\"]+)[^?]*(.*)$|\1source\2=\3\"git::ssh://git@ssh.dev.azure.com/v3/texthelp-ltd/Data%20Hub/\4\5\"|g" {} \;
+
+[no-cd]
+tg-dev-plan-original:
+  cd /workspace/terragrunt-original
+  go run main.go run-all init --terragrunt-non-interactive --terragrunt-working-dir /workspace/calypso/environment-definitions/nonprod/na/projects/datahub/dev-na/us-east-2/databricks
+  # go run main.go run-all plan --terragrunt-non-interactive --terragrunt-out-dir /tmp/plan-files --terragrunt-working-dir /workspace/calypso/environment-definitions/nonprod/na/projects/datahub/dev-na/us-east-2/databricks
+  # go run main.go run-all plan --terragrunt-non-interactive --terragrunt-out-dir ./plan-files --terragrunt-working-dir /workspace/calypso/environment-definitions/nonprod/na/projects/datahub/dev-na/us-east-2/databricks
+  # go run main.go run-all plan --terragrunt-non-interactive --terragrunt-out-dir /tmp/plan-files --terragrunt-working-dir ../calypso/environment-definitions/nonprod/na/projects/datahub/dev-na/us-east-2/databricks
+  # go run main.go run-all plan --terragrunt-non-interactive --terragrunt-out-dir /tmp/plan-files --terragrunt-working-dir ../calypso/environment-definitions/nonprod/na/projects/datahub/dev-na/us-east-2/databricks
+
+[no-cd]
+tg-dev-plan:
+  go run /workspace/terragrunt/main.go run-all init --terragrunt-non-interactive --terragrunt-out-dir /tmp/plan-files --terragrunt-working-dir /workspace/calypso/environment-definitions/nonprod/na/projects/datahub/dev-na/us-east-2/databricks
+  go run /workspace/terragrunt/main.go run-all plan --terragrunt-non-interactive --terragrunt-out-dir /tmp/plan-files --terragrunt-working-dir /workspace/calypso/environment-definitions/nonprod/na/projects/datahub/dev-na/us-east-2/databricks
+
+[no-cd]
+tg-dev-plan-exe:
+  /workspace/terragrunt/terragrunt run-all plan --terragrunt-non-interactive --terragrunt-out-dir /tmp/plan-files
+  # --terragrunt-working-dir /workspace/calypso/environment-definitions/nonprod/na/projects/datahub/dev-na/us-east-2/databricks
+
+# [no-cd]
+# tg-dev-test-1:
+#   /workspace/terragrunt-original/terragrunt

@@ -61,6 +61,13 @@ COLON=':%F{cyan}'
 PROMPT="%K{235}${DIVIDER}%F{cyan}%T${DIVIDER}path${COLON}%~${DIVIDER}aws${COLON}\${AWSUME_PROFILE}${DIVIDER}git${COLON}\${to}${DIVIDER}?${COLON}%?${DIVIDER}${ZSH_EXTRA_DIRTY}
 %k%F{green}$%f "
 
+# SSH Agent
+SSH_AGENT_LINES=$(ps aux | grep "ssh-agent -s$" | grep -v "<defunct>" | wc -l)
+if [ "0" -eq $SSH_AGENT_LINES ] ; then
+    ssh-agent -s | grep -v echo > ~/.ssh-env-vars
+fi
+. ~/.ssh-env-vars
+
 # Aliases.
 
 if [[ "${VSCODE_GIT_ASKPASS_MAIN}" == *"insiders"* ]]; then
@@ -71,8 +78,6 @@ fi
 if command -v devbox &> /dev/null; then
   eval "$(devbox global shellenv  --init-hook)"
 fi
-
-# eval "$(ssh-agent -s)"
 
 compinit # Must be before nvm bash completion.
 

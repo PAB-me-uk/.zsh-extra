@@ -58,7 +58,7 @@ PROMPT='%n in ${PWD/#$HOME/~} ${vcs_info_msg_0_} > '
 setopt prompt_subst
 DIVIDER='%F{green}|%F{blue}'
 COLON=':%F{cyan}'
-PROMPT="%K{235}${DIVIDER}%F{cyan}%T${DIVIDER}path${COLON}%~${DIVIDER}aws${COLON}\${AWSUME_PROFILE}${DIVIDER}git${COLON}\${to}${DIVIDER}?${COLON}%?${DIVIDER}${ZSH_EXTRA_DIRTY}
+PROMPT="%K{235}${DIVIDER}%F{cyan}%T${DIVIDER}path${COLON}%~${DIVIDER}aws${COLON}\${AWSUME_PROFILE}${DIVIDER}git${COLON}\${vcs_info_msg_0_}${DIVIDER}?${COLON}%?${DIVIDER}${ZSH_EXTRA_DIRTY}
 %k%F{green}$%f "
 
 # SSH Agent

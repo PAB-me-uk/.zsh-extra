@@ -6,9 +6,12 @@ terraform-log-level := "INFO"
 aws-profile := "calypso-dev-us"
 terragrunt-flags := "--terragrunt-non-interactive --terragrunt-no-color"
 terrform-state-bucket := "nonprod-terraform-state-a3kgzd7g"
-export AWS_PROFILE := aws-profile
+plugin-cache-dir := "/home/dev/terraform.d/plugin-cache"
 
+export AWS_PROFILE := aws-profile
 export TF_CLI_ARGS := "-no-color"
+export TF_PLUGIN_CACHE_DIR := plugin-cache-dir
+# export TF_PLUGIN_CACHE_MAY_BREAK_DEPENDENCY_LOCK_FILE := "0"
 
 # Default recipe, runs if you just type `just`.
 [private]
@@ -22,20 +25,23 @@ edit:
 
 # Terragrunt - Run
 [no-cd]
-tg command log-level=terraform-log-level extra-args="":
+tg command log-level=terraform-log-level extra-args="": switch-source-to-absolute-path && switch-source-to-git
   #!/bin/bash
   set -eo pipefail
+  log_file=/tmp/{{command}}$(pwd | sed 's/\//-/g').log
   export TF_LOG={{log-level}}
   export TERRAGRUNT_LOG_LEVEL={{log-level}}
+  mkdir -p {{plugin-cache-dir}}
   if [[ "{{log-level}}" == "DEBUG" ]]; then
-    time terragrunt {{command}} {{terragrunt-flags}} --terragrunt-debug
+    terragrunt {{command}} {{terragrunt-flags}} --terragrunt-debug 2>&1 | tee ${log_file}
   else
-    time terragrunt {{command}} {{terragrunt-flags}} {{extra-args}}
+    terragrunt {{command}} {{terragrunt-flags}} {{extra-args}} --terragrunt-debug 2>&1 | tee ${log_file}
   fi
+  echo "Logged to ${log_file}"
 
 # Terragrunt - Run all
 [no-cd]
-tg-run-all command log-level=terraform-log-level extra-args="":
+tg-run-all command log-level=terraform-log-level extra-args="": switch-source-to-absolute-path && switch-source-to-git
   #!/bin/bash
   set -eo pipefail
   export TF_LOG={{log-level}}
@@ -76,8 +82,11 @@ tf-state-list:
 
 # Terragrunt - Clean terragrunt cache
 tg-clean:
+  #! /bin/bash
   find /workspace/calypso -type d -name ".terragrunt-cache" -exec rm -rf {} \;
   find /workspace/calypso -type d -name ".terraform" -exec rm -rf {} \;
+  find /workspace/calypso -type d -name "_plan_files" -exec rm -rf {} \;
+  find /workspace/calypso -type f -name "terragrunt-debug.tfvars.json" -exec rm -rf {} \;
 
 # Terragrunt - List all terragrunt.hcl files
 tg-list:
@@ -127,7 +136,7 @@ format:
 # Lint files
 lint:
   #! /bin/bash
-  set -ox pipefail
+  set -oex pipefail
   cd /workspace/calypso
   terragrunt hclfmt --terragrunt-check
   terraform fmt -recursive -check

@@ -24,7 +24,7 @@ pwd:
 # Compile all Python requirement files.
 [no-cd]
 pip-compile-all:
-  find . -name "requirements.in" -exec bash -c 'dir=$(dirname {}); pip-compile --annotation-style=line --resolver=backtracking --generate-hashes --allow-unsafe --output-file="${dir}/requirements.txt" "${dir}/requirements.in"' \
+  find . -name "requirements.in" -exec bash -c 'dir=$(dirname {}); pip-compile --annotation-style=line --resolver=backtracking --generate-hashes --allow-unsafe --output-file="${dir}/requirements.txt" "${dir}/requirements.in"' \;
 
 ## AWS Related ##
 

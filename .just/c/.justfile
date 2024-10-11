@@ -239,3 +239,26 @@ tg-dev-plan-exe:
 # [no-cd]
 # tg-dev-test-1:
 #   /workspace/terragrunt-original/terragrunt
+default-profile := "workspace-primary-dev-na"
+default-databricks-warehouse_id := "0df16878fb746ed5" # primary-serverless-dev-na (ID: 0df16878fb746ed5)
+[no-cd]
+execute-sql sql_statement profile=default-profile:
+  #! /bin/bash
+  set -eo pipefail
+  echo {{profile}}
+  databricks api post "/api/2.0/sql/statements" \
+  --profile {{profile}} \
+  --json '{
+    "warehouse_id": "{{default-databricks-warehouse_id}}",
+    "statement": "{{sql_statement}}"
+  }' | tee 'sql-execution-response.json'
+  jq . 'sql-execution-response.json'
+  # export SQL_STATEMENT_ID=$(jq -r .statement_id 'sql-execution-response.json')
+  # export NEXT_CHUNK_INTERNAL_LINK=$(jq -r .result.next_chunk_internal_link 'sql-execution-response.json')
+  # echo SQL_STATEMENT_ID=$SQL_STATEMENT_ID
+  # echo NEXT_CHUNK_INTERNAL_LINK=$NEXT_CHUNK_INTERNAL_LINK
+  # #   # "parameters": [
+  # #   #   { "name": "extended_price", "value": "60000", "type": "DECIMAL(18,2)" },
+  # #   #   { "name": "ship_date", "value": "1995-01-01", "type": "DATE" },
+  # #   #   { "name": "row_limit", "value": "2", "type": "INT" }
+  # #   # ]

@@ -22,7 +22,6 @@ default:
 edit:
   code {{justfile()}}
 
-
 # Terragrunt - Run
 [no-cd]
 tg command log-level=terraform-log-level extra-args="": switch-source-to-absolute-path && switch-source-to-git

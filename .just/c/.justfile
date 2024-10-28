@@ -161,44 +161,23 @@ git-branch-tag-force version:
 
 # Install dependencies
 install:
+  #! /bin/bash
+  set -eox pipefail
   grep -qF 'export AWS_PROFILE=calypso-dev-us' ~/.zshrc || echo '\nexport AWS_PROFILE=calypso-dev-us' >> ~/.zshrc
   code --install-extension fredwangwang.vscode-hcl-format
   code --install-extension moshfeu.compare-folders
   code --install-extension ms-azure-devops.azure-pipelines
   sudo apt install -y xclip
-
-# Install Terragrunt
-install-terragrunt version:
-  sudo wget -O /usr/local/bin/terragrunt -q https://github.com/gruntwork-io/terragrunt/releases/download/v{{version}}/terragrunt_linux_amd64
-  sudo chmod +x /usr/local/bin/terragrunt
-  terragrunt --version
-
-# Install Terraform
-install-terraform version:
-  #! /bin/bash
-  set -eox pipefail
-  mkdir -p /tmp/install-terraform
-  cd /tmp/install-terraform
-  wget -O terraform.zip -q https://releases.hashicorp.com/terraform/{{version}}/terraform_{{version}}_linux_amd64.zip
-                           #https://releases.hashicorp.com/terraform/1.9.2/terraform_1.9.2_linux_amd64.zip
-  unzip -qo terraform.zip
-  sudo mv -f terraform /usr/bin/
-  sudo chmod +x /usr/bin/terraform
-  rm -rf /tmp/install-terraform
-
-# Install go
-install-go version:
-  #! /bin/bash
-  set -eox pipefail
-  wget -O /tmp/go.tar.gz -q https://go.dev/dl/go{{version}}.linux-amd64.tar.gz
-  sudo rm -rf /usr/local/go
-  sudo tar -C /usr/local -xzf /tmp/go.tar.gz
-  rm /tmp/go.tar.gz
-  if ! grep -Fxq 'export PATH=$PATH:/usr/local/go/bin' ~/.zshrc; then
-    echo 'export PATH=$PATH:/usr/local/go/bin' >> ~/.zshrc
-  fi
-  . ~/.zshrc
-  go version
+  just --justfile "${HOME}/.local/share/just/dc/.justfile" install-terraform 1.9.2
+  just --justfile "${HOME}/.local/share/just/dc/.justfile" install-terragrunt 0.66.9
+  code --install-extension ms-python.python
+  code --install-extension tamasfe.even-better-toml
+  code --install-extension ms-python.mypy-type-checker
+  code --install-extension charliermarsh.ruff
+  code --install-extension ms-azuretools.vscode-docker
+  code --install-extension elagil.pre-commit-helper
+  code --install-extension databricks.databricks
+  code --install-extension redhat.vscode-yaml
 
 # Switch source references to absolute path
 switch-source-to-absolute-path:
@@ -252,12 +231,34 @@ execute-sql sql_statement profile=default-profile:
     "statement": "{{sql_statement}}"
   }' | tee 'sql-execution-response.json'
   jq . 'sql-execution-response.json'
-  # export SQL_STATEMENT_ID=$(jq -r .statement_id 'sql-execution-response.json')
-  # export NEXT_CHUNK_INTERNAL_LINK=$(jq -r .result.next_chunk_internal_link 'sql-execution-response.json')
-  # echo SQL_STATEMENT_ID=$SQL_STATEMENT_ID
-  # echo NEXT_CHUNK_INTERNAL_LINK=$NEXT_CHUNK_INTERNAL_LINK
-  # #   # "parameters": [
-  # #   #   { "name": "extended_price", "value": "60000", "type": "DECIMAL(18,2)" },
-  # #   #   { "name": "ship_date", "value": "1995-01-01", "type": "DATE" },
-  # #   #   { "name": "row_limit", "value": "2", "type": "INT" }
-  # #   # ]
+  statement_id=$(jq -r .statement_id 'sql-execution-response.json')
+  echo "Statement ID: ${statement_id}"
+  c check-sql statement_id profile={{profile}}
+
+# Execute SQL statement (c execute-sql "$(cat | tr '\n' ' ')" for multiline paste the CTRL+D)
+
+execute-sql-as-runner sql_statement: (execute-sql sql_statement "workspace-primary-dev-na-sp-dev-na-runner")
+
+[no-cd]
+check-sql statement_id profile=default-profile:
+  #! /bin/bash
+  set -eo pipefail
+  while :; do
+    state=$(databricks api get "/api/2.0/sql/statements/{{statement_id}}" --profile {{profile}} | jq .status.state)
+    echo "State: ${state}"
+    if [[ "${state}" == "\"RUNNING\"" ]]; then
+      sleep 10
+    else
+      break
+    fi
+  done
+
+[no-cd]
+convert-double-brackets file:
+  #! /bin/bash
+  set -eo pipefail
+  sed  "s/{{{{output_catalog_name}}/'primary_dev_na_gold'/g" {{file}} | \
+  sed  "s/{{{{input_catalog_name}}/'primary_dev_na_gold'/g" | \
+  sed  "s/{{{{output_schema_name}}/'p_burridge_data_products'/g" | \
+  sed  "s/{{{{input_schema_name}}/'p_burridge_data_products'/g"
+

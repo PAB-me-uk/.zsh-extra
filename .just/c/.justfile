@@ -7,6 +7,8 @@ aws-profile := "calypso-dev-us"
 terragrunt-flags := "--terragrunt-non-interactive --terragrunt-no-color"
 terrform-state-bucket := "nonprod-terraform-state-a3kgzd7g"
 plugin-cache-dir := "/home/dev/terraform.d/plugin-cache"
+repo-parent-dir := "/workspace/calypso"
+self := "just --justfile '" + justfile() + "'"
 
 export AWS_PROFILE := aws-profile
 export TF_CLI_ARGS := "-no-color"
@@ -82,26 +84,26 @@ tf-state-list:
 # Terragrunt - Clean terragrunt cache
 tg-clean:
   #! /bin/bash
-  find /workspace/calypso -type d -name ".terragrunt-cache" -exec rm -rf {} \;
-  find /workspace/calypso -type d -name ".terraform" -exec rm -rf {} \;
-  find /workspace/calypso -type d -name "_plan_files" -exec rm -rf {} \;
-  find /workspace/calypso -type f -name "terragrunt-debug.tfvars.json" -exec rm -rf {} \;
+  find {{repo-parent-dir}} -type d -name ".terragrunt-cache" -exec rm -rf {} \;
+  find {{repo-parent-dir}} -type d -name ".terraform" -exec rm -rf {} \;
+  find {{repo-parent-dir}} -type d -name "_plan_files" -exec rm -rf {} \;
+  find {{repo-parent-dir}} -type f -name "terragrunt-debug.tfvars.json" -exec rm -rf {} \;
 
 # Terragrunt - List all terragrunt.hcl files
 tg-list:
-  find /workspace/calypso/environment-definitions . -name "terragrunt.hcl" -not -path "*/.terragrunt-cache/*" | sort
+  find {{repo-parent-dir}}/environment-definitions . -name "terragrunt.hcl" -not -path "*/.terragrunt-cache/*" | sort
 
 # Terragrunt - List all terragrunt.hcl files printing relative paths
 tg-list-relative:
-  find /workspace/calypso/environment-definitions . -name "terragrunt.hcl" -not -path "*/.terragrunt-cache/*" -printf "%P\n" | sort
+  find {{repo-parent-dir}}/environment-definitions . -name "terragrunt.hcl" -not -path "*/.terragrunt-cache/*" -printf "%P\n" | sort
 
 # Terragrunt - List all hcl files printing relative paths
 tg-list-relative-hcl:
-  find /workspace/calypso/environment-definitions . -name "*.hcl" -not -path "*/.terragrunt-cache/*" -not -name ".terraform.lock.hcl" -printf "%P\n" | sort
+  find {{repo-parent-dir}}/environment-definitions . -name "*.hcl" -not -path "*/.terragrunt-cache/*" -not -name ".terraform.lock.hcl" -printf "%P\n" | sort
 
 # Terragrunt - Generate CD command and add to clipboard
 tg-cd:
-  just --justfile "{{justfile()}}" tg-list | fzf | xargs dirname | xargs echo cd | xclip -selection c
+  {{self}} tg-list | fzf | xargs dirname | xargs echo cd | xclip -selection c
 
 # Terrform - Create module
 [no-cd]
@@ -128,7 +130,7 @@ azure-sso-login-tenant-level:
 format:
   #! /bin/bash
   set -eox pipefail
-  cd /workspace/calypso
+  cd {{repo-parent-dir}}
   terraform fmt -recursive
   terragrunt hclfmt
 
@@ -136,15 +138,15 @@ format:
 lint:
   #! /bin/bash
   set -oex pipefail
-  cd /workspace/calypso
+  cd {{repo-parent-dir}}
   terragrunt hclfmt --terragrunt-check
   terraform fmt -recursive -check
   tflint --recursive
-  cd /workspace/calypso/environment-definitions
+  cd {{repo-parent-dir}}/environment-definitions
   tfsec --exclude-downloaded-modules
-  cd /workspace/calypso/platform_components
+  cd {{repo-parent-dir}}/platform_components
   tfsec --exclude-downloaded-modules
-  cd /workspace/calypso/terraform-modules
+  cd {{repo-parent-dir}}/terraform-modules
   tfsec --exclude-downloaded-modules
 # Git - Tag branch
 [no-cd]
@@ -168,8 +170,8 @@ install:
   code --install-extension moshfeu.compare-folders
   code --install-extension ms-azure-devops.azure-pipelines
   sudo apt install -y xclip
-  just --justfile "${HOME}/.local/share/just/dc/.justfile" install-terraform 1.9.2
-  just --justfile "${HOME}/.local/share/just/dc/.justfile" install-terragrunt 0.66.9
+  dc install-terraform 1.9.2
+  dc install-terragrunt 0.66.9
   code --install-extension ms-python.python
   code --install-extension tamasfe.even-better-toml
   code --install-extension ms-python.mypy-type-checker
@@ -183,7 +185,7 @@ install:
 switch-source-to-absolute-path:
   #! /bin/bash
   set -eo pipefail
-  REPOS_PARENT_DIR=/workspace/calypso
+  REPOS_PARENT_DIR={{repo-parent-dir}}
   cd ${REPOS_PARENT_DIR}
   find \( -name "*.tf" -o -name "*.hcl" \) -exec sed -i -E "s|^(\s+)source(\s+)=(\s+)\"git::ssh://git@ssh.dev.azure.com/v3/texthelp-ltd/Data%20Hub/([^?]+)([^\"]+).*$|\1source\2=\3\"${REPOS_PARENT_DIR}/\4\" # \5|g" {} \;
 
@@ -191,28 +193,28 @@ switch-source-to-absolute-path:
 switch-source-to-git:
   #! /bin/bash
   set -eo pipefail
-  REPOS_PARENT_DIR=/workspace/calypso
+  REPOS_PARENT_DIR={{repo-parent-dir}}
   cd ${REPOS_PARENT_DIR}
   find \( -name "*.tf" -o -name "*.hcl" \) -exec sed -i -E "s|^(\s+)source(\s+)=(\s+)\"${REPOS_PARENT_DIR}/([^\"]+)[^?]*(.*)$|\1source\2=\3\"git::ssh://git@ssh.dev.azure.com/v3/texthelp-ltd/Data%20Hub/\4\5\"|g" {} \;
 
 [no-cd]
 tg-dev-plan-original:
   cd /workspace/terragrunt-original
-  go run main.go run-all init --terragrunt-non-interactive --terragrunt-working-dir /workspace/calypso/environment-definitions/nonprod/na/projects/datahub/dev-na/us-east-2/databricks
-  # go run main.go run-all plan --terragrunt-non-interactive --terragrunt-out-dir /tmp/plan-files --terragrunt-working-dir /workspace/calypso/environment-definitions/nonprod/na/projects/datahub/dev-na/us-east-2/databricks
-  # go run main.go run-all plan --terragrunt-non-interactive --terragrunt-out-dir ./plan-files --terragrunt-working-dir /workspace/calypso/environment-definitions/nonprod/na/projects/datahub/dev-na/us-east-2/databricks
+  go run main.go run-all init --terragrunt-non-interactive --terragrunt-working-dir {{repo-parent-dir}}/environment-definitions/nonprod/na/projects/datahub/dev-na/us-east-2/databricks
+  # go run main.go run-all plan --terragrunt-non-interactive --terragrunt-out-dir /tmp/plan-files --terragrunt-working-dir {{repo-parent-dir}}/environment-definitions/nonprod/na/projects/datahub/dev-na/us-east-2/databricks
+  # go run main.go run-all plan --terragrunt-non-interactive --terragrunt-out-dir ./plan-files --terragrunt-working-dir {{repo-parent-dir}}/environment-definitions/nonprod/na/projects/datahub/dev-na/us-east-2/databricks
   # go run main.go run-all plan --terragrunt-non-interactive --terragrunt-out-dir /tmp/plan-files --terragrunt-working-dir ../calypso/environment-definitions/nonprod/na/projects/datahub/dev-na/us-east-2/databricks
   # go run main.go run-all plan --terragrunt-non-interactive --terragrunt-out-dir /tmp/plan-files --terragrunt-working-dir ../calypso/environment-definitions/nonprod/na/projects/datahub/dev-na/us-east-2/databricks
 
 [no-cd]
 tg-dev-plan:
-  go run /workspace/terragrunt/main.go run-all init --terragrunt-non-interactive --terragrunt-out-dir /tmp/plan-files --terragrunt-working-dir /workspace/calypso/environment-definitions/nonprod/na/projects/datahub/dev-na/us-east-2/databricks
-  go run /workspace/terragrunt/main.go run-all plan --terragrunt-non-interactive --terragrunt-out-dir /tmp/plan-files --terragrunt-working-dir /workspace/calypso/environment-definitions/nonprod/na/projects/datahub/dev-na/us-east-2/databricks
+  go run /workspace/terragrunt/main.go run-all init --terragrunt-non-interactive --terragrunt-out-dir /tmp/plan-files --terragrunt-working-dir {{repo-parent-dir}}/environment-definitions/nonprod/na/projects/datahub/dev-na/us-east-2/databricks
+  go run /workspace/terragrunt/main.go run-all plan --terragrunt-non-interactive --terragrunt-out-dir /tmp/plan-files --terragrunt-working-dir {{repo-parent-dir}}/environment-definitions/nonprod/na/projects/datahub/dev-na/us-east-2/databricks
 
 [no-cd]
 tg-dev-plan-exe:
   /workspace/terragrunt/terragrunt run-all plan --terragrunt-non-interactive --terragrunt-out-dir /tmp/plan-files
-  # --terragrunt-working-dir /workspace/calypso/environment-definitions/nonprod/na/projects/datahub/dev-na/us-east-2/databricks
+  # --terragrunt-working-dir {{repo-parent-dir}}/environment-definitions/nonprod/na/projects/datahub/dev-na/us-east-2/databricks
 
 # [no-cd]
 # tg-dev-test-1:
@@ -254,11 +256,28 @@ check-sql statement_id profile=default-profile:
   done
 
 [no-cd]
-convert-double-brackets file:
-  #! /bin/bash
-  set -eo pipefail
-  sed  "s/{{{{output_catalog_name}}/'primary_dev_na_gold'/g" {{file}} | \
-  sed  "s/{{{{input_catalog_name}}/'primary_dev_na_gold'/g" | \
-  sed  "s/{{{{output_schema_name}}/'p_burridge_data_products'/g" | \
-  sed  "s/{{{{input_schema_name}}/'p_burridge_data_products'/g"
+databricks-bundle:
+  databricks bundle deploy --target personal_dev --profile default
 
+sql-file-inject-parameters sql-file:
+  #! /workspace/.python/3.11/bin/python
+  import sys
+  sys.path.append('.')
+  from lib.databricks_helper import inject_parameters_into_sql_file
+  inject_parameters_into_sql_file('{{sql-file}}')
+
+sql-file-inject-parameters-to-clipboard:
+  {{self}} sql-file-inject-parameters "$({{self}} sql-file-fzf)" | xclip -selection clipboard
+
+sql-file-fzf:
+  find {{repo-parent-dir}}/data-pipelines/sql -name "*.sql" | sort | fzf
+
+create-temp-job-for-sql-task sql-file:
+  #! /workspace/.python/3.11/bin/python
+  import sys
+  sys.path.append('.')
+  from lib.databricks_helper import create_temp_job_for_sql_task
+  create_temp_job_for_sql_task('{{sql-file}}')
+
+test:
+  echo {{self}}

@@ -6,6 +6,8 @@
 
 workspace-path := "/workspace"
 
+dev-container-mappings := ".zsh-extra .databrickscfg"
+
 # Default recipe, runs if you just type `just`.
 [private]
 default:
@@ -130,11 +132,11 @@ secret-get-value:
 
 # Create a dev container
 create-dev-container container-name volume-name python-version extra-mounts="":
-  docker run --rm -it --pull=always --env HOST_USER_HOME="${HOME}" --mount type=bind,source=/var/run/docker.sock,target=/var/run/docker.sock pabuk/dev-python:{{python-version}} /bin/zsh -c "dc create-dev-container {{container-name}} {{volume-name}} {{python-version}} .zsh-extra {{extra-mounts}}"
+  docker run --rm -it --pull=always --env HOST_USER_HOME="${HOME}" --mount type=bind,source=/var/run/docker.sock,target=/var/run/docker.sock pabuk/dev-python:{{python-version}} /bin/zsh -c "dc create-dev-container {{container-name}} {{volume-name}} {{python-version}} {{dev-container-mappings}} {{extra-mounts}}"
 
 # Create a dev container from local image (no pull)
 create-dev-container-no-pull container-name volume-name python-version extra-mounts="":
-  docker run --rm -it --pull=always --env HOST_USER_HOME="${HOME}" --mount type=bind,source=/var/run/docker.sock,target=/var/run/docker.sock pabuk/dev-python:{{python-version}} /bin/zsh -c "NO_PULL=1 dc create-dev-container {{container-name}} {{volume-name}} {{python-version}} .zsh-extra {{extra-mounts}}"
+  docker run --rm -it --pull=always --env HOST_USER_HOME="${HOME}" --mount type=bind,source=/var/run/docker.sock,target=/var/run/docker.sock pabuk/dev-python:{{python-version}} /bin/zsh -c "NO_PULL=1 dc create-dev-container {{container-name}} {{volume-name}} {{python-version}} {{dev-container-mappings}} {{extra-mounts}}"
 
 stacks-list:
   aws cloudformation list-stacks --query "StackSummaries[].StackName" --no-paginate | jq -rc '.[]'

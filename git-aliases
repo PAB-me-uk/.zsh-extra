@@ -13,6 +13,7 @@ alias gpl='gfq && git pull'
 alias gprune='git gc --prune=now && git remote prune origin'
 alias gpu='gpl && git push'
 alias gs='git status'
+alias gignore='git update-index --assume-unchanged'
 alias gunignore='git update-index --no-assume-unchanged'
 alias gl='git log --oneline -n 10'
 alias gsearch='git rev-list --all | xargs git grep '
@@ -81,7 +82,7 @@ function gnb() {
   git branch $1 && \
   git checkout $1 && \
   git push -u origin $1 && \
-  gb
+  gb | grep '^*'
 }
 
 function gsmu() {

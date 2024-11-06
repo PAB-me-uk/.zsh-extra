@@ -13,6 +13,7 @@ self := "just --justfile '" + justfile() + "'"
 export AWS_PROFILE := aws-profile
 export TF_CLI_ARGS := "-no-color"
 export TF_PLUGIN_CACHE_DIR := plugin-cache-dir
+export DATABRICKS_CONFIG_PROFILE := "default"
 # export TF_PLUGIN_CACHE_MAY_BREAK_DEPENDENCY_LOCK_FILE := "0"
 
 # Default recipe, runs if you just type `just`.
@@ -237,7 +238,7 @@ execute-sql sql_statement profile=default-profile:
   echo "Statement ID: ${statement_id}"
   c check-sql statement_id profile={{profile}}
 
-# Execute SQL statement (c execute-sql "$(cat | tr '\n' ' ')" for multiline paste the CTRL+D)
+# Execute SQL statement (c execute-sql-as-runner "$(cat | tr '\n' ' ')" for multiline paste the CTRL+D)
 
 execute-sql-as-runner sql_statement: (execute-sql sql_statement "workspace-primary-dev-na-sp-dev-na-runner")
 
@@ -259,6 +260,27 @@ check-sql statement_id profile=default-profile:
 databricks-bundle:
   databricks bundle deploy --target personal_dev --profile default
 
+sql-file-fzf:
+  #! /bin/bash
+  last_select_store_file="/tmp/fzf-last-selected-sql-file"
+  last_selected=""
+  if [ -f "${last_select_store_file}" ]; then
+    last_selected=$(cat "${last_select_store_file}")
+  fi
+  selected=$(find {{repo-parent-dir}}/data-pipelines/sql -name "*.sql" | sort | fzf --query="$last_selected")
+  basename "${selected}" > "${last_select_store_file}"
+  echo "${selected}"
+
+databricks-jobs-fzf:
+  #! /bin/bash
+  last_select_store_file="/tmp/fzf-last-selected-databricks-job"
+  last_selected=""
+  if [ -f "${last_select_store_file}" ]; then
+    last_selected=$(cat "${last_select_store_file}")
+  fi
+  selected=$(databricks jobs list --profile default | awk '{print substr($0, index($0,$2))}' | grep p_burridge | sort | fzf --query="$last_selected")
+  echo "${selected}" | tee "${last_select_store_file}"
+
 sql-file-inject-parameters sql-file:
   #! /workspace/.python/3.11/bin/python
   import sys
@@ -269,15 +291,63 @@ sql-file-inject-parameters sql-file:
 sql-file-inject-parameters-to-clipboard:
   {{self}} sql-file-inject-parameters "$({{self}} sql-file-fzf)" | xclip -selection clipboard
 
-sql-file-fzf:
-  find {{repo-parent-dir}}/data-pipelines/sql -name "*.sql" | sort | fzf
-
-create-temp-job-for-sql-task sql-file:
+sql-file-create-temp-job sql-file:
   #! /workspace/.python/3.11/bin/python
   import sys
   sys.path.append('.')
   from lib.databricks_helper import create_temp_job_for_sql_task
   create_temp_job_for_sql_task('{{sql-file}}')
 
+[private]
+sql-file-get-identifier-internal sql-file:
+  #! /workspace/.python/3.11/bin/python
+  import sys
+  sys.path.append('.')
+  from lib.databricks_helper import get_identifier_from_sql_file
+  get_identifier_from_sql_file('{{sql-file}}')
+
+sql-file-identifier:
+  {{self}} sql-file-get-identifier-internal "$({{self}} sql-file-fzf)" | xclip -selection clipboard
+  echo "Added to clipboard"
 test:
   echo {{self}}
+
+[no-cd, private]
+sql-file-prepare-internal sql-file:
+  #! /bin/bash
+  set -eo pipefail
+  grep -v '\%sql' {{sql-file}} | \
+  grep -v '\[REPLACEMENT\]' | \
+  sed 's|\-\- \[ORIGINAL\]||g' > /tmp/sql-file-prepared.sql
+  mv /tmp/sql-file-prepared.sql {{sql-file}}
+  pdm sqlfluff_fix_file {{sql-file}} || true
+  pdm sqlfluff_check_file {{sql-file}}
+
+[no-cd]
+sql-file-prepare:
+  {{self}} sql-file-prepare-internal "$({{self}} sql-file-fzf)"
+
+[no-cd, private]
+databricks-execute-job-by-name-internal job-name:
+  #! /bin/bash
+  set -eox pipefail
+  echo "Job Name: {{job-name}}"
+  job_id=$(databricks jobs list --name '{{job-name}}' | awk '{print $1}')
+  echo "JobID: ${job_id}"
+  time databricks jobs run-now --timeout 2h ${job_id}
+
+[no-cd, private]
+sql-file-execute-internal sql-file: (sql-file-prepare-internal sql-file) (sql-file-create-temp-job sql-file) databricks-bundle (databricks-execute-job-by-name-internal "[dev p_burridge] temp_job_personal_dev")
+
+[no-cd]
+sql-file-execute:
+  {{self}} sql-file-execute-internal "$({{self}} sql-file-fzf)"
+
+[no-cd, private]
+databricks-execute-job-by-name job-name: databricks-bundle (databricks-execute-job-by-name-internal job-name)
+  echo "Job Name (final): {{job-name}}"
+
+[no-cd]
+databricks-execute-job:
+  {{self}} databricks-execute-job-by-name "$({{self}} databricks-jobs-fzf)"
+

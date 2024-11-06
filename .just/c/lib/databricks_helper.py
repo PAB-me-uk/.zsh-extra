@@ -16,17 +16,18 @@ ENV_CATALOG_IDENTIFIER = "primary_dev_na"
 def yield_job_definitions():
     for path, _, files in os.walk(RESOURCES_DIRECTORY):
         for file in files:
-            if file.endswith(".yml"):
+            if file.endswith(".yml") and not path.endswith("_temp_"):
                 contents = yaml.load(open(os.path.join(path, file)), Loader=yaml.SafeLoader)
                 yield from contents["resources"]["jobs"].items()
 
 
-def find_job_with_sql_task(end_of_sql_file_name):
+def find_job_with_sql_task(sql_file):
+    end_of_sql_file_path = sql_file.split("/sql/")[-1]
     jobs = yield_job_definitions()
     for job_name, job in jobs:
         for task in job.get("tasks", []):
             if "sql_task" in task and task["sql_task"]["file"]["path"].endswith(
-                end_of_sql_file_name
+                end_of_sql_file_path
             ):
                 return (job_name, job, task)
 
@@ -43,13 +44,13 @@ def get_parameters_for_sql_task(job, task):
     }
 
 
-def find_parameters_for_sql_task(end_of_sql_file_name):
-    job_name, job, task = find_job_with_sql_task(end_of_sql_file_name)
+def find_parameters_for_sql_task(sql_file):
+    job_name, job, task = find_job_with_sql_task(sql_file)
     return get_parameters_for_sql_task(job, task)
 
 
-def create_temp_job_for_sql_task(end_of_sql_file_name):
-    job_name, job, task = find_job_with_sql_task(end_of_sql_file_name)
+def create_temp_job_for_sql_task(sql_file):
+    job_name, job, task = find_job_with_sql_task(sql_file)
     parameters = get_parameters_for_sql_task(job, task)
     task = deepcopy(task)
     if "depends_on" in task:
@@ -84,9 +85,7 @@ def create_temp_job_for_sql_task(end_of_sql_file_name):
 
 
 def inject_parameters_into_sql_file(sql_file):
-    end_of_sql_file_path = sql_file.split("/sql/")[-1]
-
-    parameters = find_parameters_for_sql_task(end_of_sql_file_path)
+    parameters = find_parameters_for_sql_task(sql_file)
 
     output = ["%sql\n"]
     with open(os.path.join(RESOURCES_DIRECTORY, sql_file)) as file:
@@ -106,3 +105,16 @@ def inject_parameters_into_sql_file(sql_file):
                 output.append(f"{line}")
 
     print("".join(output))
+
+
+def get_identifier_from_sql_file(sql_file):
+    parameters = find_parameters_for_sql_task(sql_file)
+    print(
+        ".".join(
+            [
+                parameters.get("output_catalog_name", "?"),
+                parameters.get("output_schema_name", "?"),
+                os.path.split(sql_file)[-1][:-4],
+            ]
+        )
+    )

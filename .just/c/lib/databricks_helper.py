@@ -2,15 +2,37 @@
 import json
 import os
 from copy import deepcopy
+from functools import lru_cache
 
 import yaml
+from databricks.sdk import WorkspaceClient
 
-RESOURCES_DIRECTORY = "/workspace/calypso/data-pipelines/resources"
+REPO_DIRECTORY = "/workspace/calypso/data-pipelines"
+RESOURCES_DIRECTORY = f"{REPO_DIRECTORY}/resources"
 LEN_RESOURCES_DIRECTORY = len(RESOURCES_DIRECTORY)
 TEMP_JOB_DIRECTORY = os.path.join(RESOURCES_DIRECTORY, "_temp_")
+TARGET = "personal_dev"
 
-ENV_SCHEMA_PREFIX = "p_burridge_"
-ENV_CATALOG_IDENTIFIER = "primary_dev_na"
+
+@lru_cache()
+def get_workspace_client(profile="default"):
+    return WorkspaceClient(profile=profile)
+
+
+@lru_cache()
+def load_databricks_configuration():
+    return yaml.load(open(os.path.join(REPO_DIRECTORY, "databricks.yml")), Loader=yaml.SafeLoader)
+
+
+def get_schema_prefix(profile="default"):
+    workspace_client = get_workspace_client(profile)
+    name = workspace_client.current_user.me().name
+    return f"{name.given_name[0]}_{name.family_name}_".lower()
+
+
+def get_catalog_identifier():
+    configuration = load_databricks_configuration()
+    return configuration["targets"][TARGET]["variables"]["ENV_CATALOG_IDENTIFIER"]
 
 
 def yield_job_definitions():
@@ -37,8 +59,8 @@ def get_parameters_for_sql_task(job, task):
         parameter["name"]: parameter["default"] for parameter in job.get("parameters", [])
     } | task["sql_task"].get("parameters", {})
     return {
-        key: value.replace("${var.ENV_CATALOG_IDENTIFIER}", ENV_CATALOG_IDENTIFIER).replace(
-            "${var.ENV_SCHEMA_PREFIX}", ENV_SCHEMA_PREFIX
+        key: value.replace("${var.ENV_CATALOG_IDENTIFIER}", get_catalog_identifier()).replace(
+            "${var.ENV_SCHEMA_PREFIX}", get_schema_prefix()
         )
         for key, value in parameters.items()
     }

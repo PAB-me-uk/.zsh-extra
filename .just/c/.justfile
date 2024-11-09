@@ -181,6 +181,9 @@ install:
   code --install-extension elagil.pre-commit-helper
   code --install-extension databricks.databricks
   code --install-extension redhat.vscode-yaml
+  pip install --upgrade pip
+  pip install databricks-sdk==0.36.0
+
 
 # Switch source references to absolute path
 switch-source-to-absolute-path:
@@ -351,3 +354,10 @@ databricks-execute-job-by-name job-name: databricks-bundle (databricks-execute-j
 databricks-execute-job:
   {{self}} databricks-execute-job-by-name "$({{self}} databricks-jobs-fzf)"
 
+databricks-get-env-schema-prefix:
+  #! /bin/bash
+  set -eo pipefail
+  user=$(databricks current-user me --profile {{DATABRICKS_CONFIG_PROFILE}})
+  surname=$(echo ${user} | jq -r .name.familyName | tr '[:upper:]' '[:lower:]')
+  forename=$(echo ${user} | jq -r .name.givenName | tr '[:upper:]' '[:lower:]')
+  echo "${forename:0:1}_${surname}_"

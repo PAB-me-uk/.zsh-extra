@@ -11,11 +11,12 @@ REPO_DIRECTORY = "/workspace/calypso/data-pipelines"
 RESOURCES_DIRECTORY = f"{REPO_DIRECTORY}/resources"
 LEN_RESOURCES_DIRECTORY = len(RESOURCES_DIRECTORY)
 TEMP_JOB_DIRECTORY = os.path.join(RESOURCES_DIRECTORY, "_temp_")
-TARGET = "personal_dev"
+TARGET_PREFIX = "personal_dev"
+DATABRICKS_PROFILE = "default-na"
 
 
 @lru_cache()
-def get_workspace_client(profile="default"):
+def get_workspace_client(profile=DATABRICKS_PROFILE):
     return WorkspaceClient(profile=profile)
 
 
@@ -24,15 +25,17 @@ def load_databricks_configuration():
     return yaml.load(open(os.path.join(REPO_DIRECTORY, "databricks.yml")), Loader=yaml.SafeLoader)
 
 
-def get_schema_prefix(profile="default"):
+def get_schema_prefix(profile=DATABRICKS_PROFILE):
     workspace_client = get_workspace_client(profile)
     name = workspace_client.current_user.me().name
     return f"{name.given_name[0]}_{name.family_name}_".lower()
 
 
-def get_catalog_identifier():
+def get_catalog_identifier(region):
     configuration = load_databricks_configuration()
-    return configuration["targets"][TARGET]["variables"]["ENV_CATALOG_IDENTIFIER"]
+    return configuration["targets"][f"{TARGET_PREFIX}_{region}"]["variables"][
+        "ENV_CATALOG_IDENTIFIER"
+    ]
 
 
 def yield_job_definitions():
@@ -54,26 +57,26 @@ def find_job_with_sql_task(sql_file):
                 return (job_name, job, task)
 
 
-def get_parameters_for_sql_task(job, task):
+def get_parameters_for_sql_task(region, job, task):
     parameters = {
         parameter["name"]: parameter["default"] for parameter in job.get("parameters", [])
     } | task["sql_task"].get("parameters", {})
     return {
-        key: value.replace("${var.ENV_CATALOG_IDENTIFIER}", get_catalog_identifier()).replace(
+        key: value.replace("${var.ENV_CATALOG_IDENTIFIER}", get_catalog_identifier(region)).replace(
             "${var.ENV_SCHEMA_PREFIX}", get_schema_prefix()
         )
         for key, value in parameters.items()
     }
 
 
-def find_parameters_for_sql_task(sql_file):
+def find_parameters_for_sql_task(region, sql_file):
     job_name, job, task = find_job_with_sql_task(sql_file)
-    return get_parameters_for_sql_task(job, task)
+    return get_parameters_for_sql_task(region, job, task)
 
 
-def create_temp_job_for_sql_task(sql_file):
+def create_temp_job_for_sql_task(region, sql_file):
     job_name, job, task = find_job_with_sql_task(sql_file)
-    parameters = get_parameters_for_sql_task(job, task)
+    parameters = get_parameters_for_sql_task(region, job, task)
     task = deepcopy(task)
     if "depends_on" in task:
         del task["depends_on"]
@@ -86,7 +89,10 @@ def create_temp_job_for_sql_task(sql_file):
                 "temp_job": {
                     "name": "temp_job_${bundle.target}",
                     "permissions": [
-                        {"group_name": "SG-Databricks-Engineering", "level": "CAN_MANAGE_RUN"}
+                        {
+                            "group_name": "SG-Databricks-Engineering-dev-na",
+                            "level": "CAN_MANAGE_RUN",
+                        }
                     ],
                     "tasks": [task],
                 }
@@ -106,8 +112,8 @@ def create_temp_job_for_sql_task(sql_file):
     print(f"Job definition saved to {output_file}")
 
 
-def inject_parameters_into_sql_file(sql_file):
-    parameters = find_parameters_for_sql_task(sql_file)
+def inject_parameters_into_sql_file(region, sql_file):
+    parameters = find_parameters_for_sql_task(region, sql_file)
 
     output = ["%sql\n"]
     with open(os.path.join(RESOURCES_DIRECTORY, sql_file)) as file:
@@ -129,8 +135,8 @@ def inject_parameters_into_sql_file(sql_file):
     print("".join(output))
 
 
-def get_identifier_from_sql_file(sql_file):
-    parameters = find_parameters_for_sql_task(sql_file)
+def get_identifier_from_sql_file(region, sql_file):
+    parameters = find_parameters_for_sql_task(region, sql_file)
     print(
         ".".join(
             [

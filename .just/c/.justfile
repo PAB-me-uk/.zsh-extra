@@ -3,7 +3,7 @@
 
 workspace-path := "/workspace"
 terraform-log-level := "INFO"
-aws-profile := "calypso-dev-us"
+aws-profile := "calypso-dev-na"
 terragrunt-flags := "--terragrunt-non-interactive --terragrunt-no-color"
 terrform-state-bucket := "nonprod-terraform-state-a3kgzd7g"
 plugin-cache-dir := "/home/dev/terraform.d/plugin-cache"
@@ -24,6 +24,12 @@ default:
 # Edit the current .justfile
 edit:
   code {{justfile()}}
+
+edit-databricks-helper:
+  code /home/dev/.zsh-extra/.just/c/lib/databricks_helper.py
+
+edit-fivetran-helper:
+  code /home/dev/.zsh-extra/.just/c/lib/fivetran_helper.py
 
 # Terragrunt - Run
 [no-cd]
@@ -166,7 +172,7 @@ git-branch-tag-force version:
 install:
   #! /bin/bash
   set -eox pipefail
-  grep -qF 'export AWS_PROFILE=calypso-dev-us' ~/.zshrc || echo '\nexport AWS_PROFILE=calypso-dev-us' >> ~/.zshrc
+  grep -qF 'export AWS_PROFILE=calypso-dev-na' ~/.zshrc || echo '\nexport AWS_PROFILE=calypso-dev-na' >> ~/.zshrc
   code --install-extension fredwangwang.vscode-hcl-format
   code --install-extension moshfeu.compare-folders
   code --install-extension ms-azure-devops.azure-pipelines
@@ -224,33 +230,36 @@ tg-dev-plan-exe:
 # tg-dev-test-1:
 #   /workspace/terragrunt-original/terragrunt
 default-profile := "workspace-primary-dev-na"
-default-databricks-warehouse_id := "0df16878fb746ed5" # primary-serverless-dev-na (ID: 0df16878fb746ed5)
+default-databricks-warehouse-id-us := "0df16878fb746ed5" # primary-serverless-dev-na (ID: 0df16878fb746ed5)
+default-databricks-warehouse-id-eu := "e5665095820b5883"
+
 [no-cd]
-execute-sql sql_statement profile=default-profile:
+execute-sql sql_statement region profile warehouse-id:
   #! /bin/bash
-  set -eo pipefail
-  echo {{profile}}
+  set -eox pipefail
   databricks api post "/api/2.0/sql/statements" \
+  --target personal_dev_{{region}} \
   --profile {{profile}} \
   --json '{
-    "warehouse_id": "{{default-databricks-warehouse_id}}",
+    "warehouse_id": "{{warehouse-id}}",
     "statement": "{{sql_statement}}"
   }' | tee 'sql-execution-response.json'
   jq . 'sql-execution-response.json'
   statement_id=$(jq -r .statement_id 'sql-execution-response.json')
   echo "Statement ID: ${statement_id}"
-  c check-sql statement_id profile={{profile}}
+  c check-sql statement_id {{region}}
 
 # Execute SQL statement (c execute-sql-as-runner "$(cat | tr '\n' ' ')" for multiline paste the CTRL+D)
 
-execute-sql-as-runner sql_statement: (execute-sql sql_statement "workspace-primary-dev-na-sp-dev-na-runner")
+execute-sql-as-runner-us sql_statement: (execute-sql sql_statement "na" "workspace-primary-dev-na-sp-dev-na-runner" default-databricks-warehouse-id-us)
+execute-sql-as-runner-eu sql_statement: (execute-sql sql_statement "eu" "workspace-primary-dev-eu-sp-dev-eu-runner" default-databricks-warehouse-id-eu)
 
 [no-cd]
-check-sql statement_id profile=default-profile:
+check-sql statement_id region:
   #! /bin/bash
   set -eo pipefail
   while :; do
-    state=$(databricks api get "/api/2.0/sql/statements/{{statement_id}}" --profile {{profile}} | jq .status.state)
+    state=$(databricks api get "/api/2.0/sql/statements/{{statement_id}}" --target personal_dev_{{region}} --profile default-{{region}} | jq .status.state)
     echo "State: ${state}"
     if [[ "${state}" == "\"RUNNING\"" ]]; then
       sleep 10
@@ -260,60 +269,71 @@ check-sql statement_id profile=default-profile:
   done
 
 [no-cd]
-databricks-bundle:
-  databricks bundle deploy --target personal_dev --profile default
+databricks-bundle region:
+  databricks bundle deploy --target personal_dev_{{region}} --profile default-{{region}} --auto-approve
 
 sql-file-fzf:
   #! /bin/bash
-  last_select_store_file="/tmp/fzf-last-selected-sql-file"
+  last_select_store_file="  "
   last_selected=""
   if [ -f "${last_select_store_file}" ]; then
     last_selected=$(cat "${last_select_store_file}")
   fi
   selected=$(find {{repo-parent-dir}}/data-pipelines/sql -name "*.sql" | sort | fzf --query="$last_selected")
-  basename "${selected}" > "${last_select_store_file}"
+  echo "${selected}" > "${last_select_store_file}"
   echo "${selected}"
 
-databricks-jobs-fzf:
+databricks-jobs-fzf region:
   #! /bin/bash
   last_select_store_file="/tmp/fzf-last-selected-databricks-job"
   last_selected=""
   if [ -f "${last_select_store_file}" ]; then
     last_selected=$(cat "${last_select_store_file}")
   fi
-  selected=$(databricks jobs list --profile default | awk '{print substr($0, index($0,$2))}' | grep p_burridge | sort | fzf --query="$last_selected")
+  selected=$(databricks jobs list --target personal_dev_{{region}} --profile default-{{region}} | awk '{print substr($0, index($0,$2))}' | grep p_burridge | sort | fzf --query="$last_selected")
   echo "${selected}" | tee "${last_select_store_file}"
 
-sql-file-inject-parameters sql-file:
+sql-file-inject-parameters region sql-file:
   #! /workspace/.python/3.11/bin/python
   import sys
   sys.path.append('.')
   from lib.databricks_helper import inject_parameters_into_sql_file
-  inject_parameters_into_sql_file('{{sql-file}}')
+  inject_parameters_into_sql_file('{{region}}', '{{sql-file}}')
 
-sql-file-inject-parameters-to-clipboard:
-  {{self}} sql-file-inject-parameters "$({{self}} sql-file-fzf)" | xclip -selection clipboard
+sql-file-inject-parameters-to-clipboard region:
+  {{self}} sql-file-inject-parameters "{{region}}" "$({{self}} sql-file-fzf)" | xclip -selection clipboard
 
-sql-file-create-temp-job sql-file:
+[private]
+sql-file-get-parameters-internal region sql-file:
+  #! /workspace/.python/3.11/bin/python
+  import sys
+  import json
+  sys.path.append('.')
+  from lib.databricks_helper import find_parameters_for_sql_task
+  print(json.dumps(find_parameters_for_sql_task('{{region}}', '{{sql-file}}'), indent=2))
+
+[no-cd]
+sql-file-get-parameters region:
+  {{self}} sql-file-get-parameters-internal {{region}} "$({{self}} sql-file-fzf)"
+
+sql-file-create-temp-job region sql-file:
   #! /workspace/.python/3.11/bin/python
   import sys
   sys.path.append('.')
   from lib.databricks_helper import create_temp_job_for_sql_task
-  create_temp_job_for_sql_task('{{sql-file}}')
+  create_temp_job_for_sql_task('{{region}}', '{{sql-file}}')
 
 [private]
-sql-file-get-identifier-internal sql-file:
+sql-file-get-identifier-internal region sql-file:
   #! /workspace/.python/3.11/bin/python
   import sys
   sys.path.append('.')
   from lib.databricks_helper import get_identifier_from_sql_file
-  get_identifier_from_sql_file('{{sql-file}}')
+  get_identifier_from_sql_file('{{region}}', '{{sql-file}}')
 
-sql-file-identifier:
-  {{self}} sql-file-get-identifier-internal "$({{self}} sql-file-fzf)" | xclip -selection clipboard
+sql-file-identifier region:
+  {{self}} sql-file-get-identifier-internal "{{region}}" "$({{self}} sql-file-fzf)" | xclip -selection clipboard
   echo "Added to clipboard"
-test:
-  echo {{self}}
 
 [no-cd, private]
 sql-file-prepare-internal sql-file:
@@ -326,38 +346,79 @@ sql-file-prepare-internal sql-file:
   pdm sqlfluff_fix_file {{sql-file}} || true
   pdm sqlfluff_check_file {{sql-file}}
 
-[no-cd]
-sql-file-prepare:
-  {{self}} sql-file-prepare-internal "$({{self}} sql-file-fzf)"
-
 [no-cd, private]
-databricks-execute-job-by-name-internal job-name:
+databricks-execute-job-by-name-internal region job-name:
   #! /bin/bash
   set -eox pipefail
   echo "Job Name: {{job-name}}"
-  job_id=$(databricks jobs list --name '{{job-name}}' | awk '{print $1}')
+  if [ -z "{{job-name}}" ]; then
+    echo "Variable job-name is empty, exiting."
+    exit 1
+  fi
+  job_id=$(databricks jobs list --name '{{job-name}}_{{region}}' --target 'personal_dev_{{region}}' --profile 'default-{{region}}' | awk '{print $1}')
   echo "JobID: ${job_id}"
-  time databricks jobs run-now --timeout 2h ${job_id}
+  databricks jobs run-now --timeout 2h --target personal_dev_{{region}} --profile default-{{region}} ${job_id}
 
 [no-cd, private]
-sql-file-execute-internal sql-file: (sql-file-prepare-internal sql-file) (sql-file-create-temp-job sql-file) databricks-bundle (databricks-execute-job-by-name-internal "[dev p_burridge] temp_job_personal_dev")
+sql-file-execute-internal region sql-file: (sql-file-prepare-internal sql-file) (sql-file-create-temp-job region sql-file) (databricks-bundle region) (databricks-execute-job-by-name-internal region "[dev p_burridge] temp_job_personal_dev")
 
 [no-cd]
-sql-file-execute:
-  {{self}} sql-file-execute-internal "$({{self}} sql-file-fzf)"
+sql-file-execute region:
+  {{self}} sql-file-execute-internal {{region}} "$({{self}} sql-file-fzf)"
 
 [no-cd, private]
-databricks-execute-job-by-name job-name: databricks-bundle (databricks-execute-job-by-name-internal job-name)
+databricks-execute-job-by-name region job-name: (databricks-bundle region) (databricks-execute-job-by-name-internal region job-name)
   echo "Job Name (final): {{job-name}}"
 
 [no-cd]
-databricks-execute-job:
-  {{self}} databricks-execute-job-by-name "$({{self}} databricks-jobs-fzf)"
+databricks-execute-job region:
+  {{self}} databricks-execute-job-by-name "{{region}}" "$({{self}} databricks-jobs-fzf {{region}})"
 
-databricks-get-env-schema-prefix:
+databricks-get-env-schema-prefix region:
   #! /bin/bash
   set -eo pipefail
-  user=$(databricks current-user me --profile {{DATABRICKS_CONFIG_PROFILE}})
+  user=$(databricks current-user me --target personal_dev_{{region}} --profile default-{{region}}
   surname=$(echo ${user} | jq -r .name.familyName | tr '[:upper:]' '[:lower:]')
   forename=$(echo ${user} | jq -r .name.givenName | tr '[:upper:]' '[:lower:]')
   echo "${forename:0:1}_${surname}_"
+
+databricks-get-bundle region:
+  databricks fs cp --target personal_dev_{{region}} --profile default-{{region}} -r dbfs:/Workspace/Users/p.burridge@texthelp.com/.bundle /workspace/databricks-files/
+
+databricks-ls region extra:
+  databricks fs ls --target personal_dev_{{region}} --profile default-{{region}} dbfs:/{{extra}}
+
+# fivetran-list-groups: (fivetran-api-get "groups")
+fivetran-list-connectors:
+  #! /workspace/.python/3.11/bin/python
+  import sys
+  sys.path.append('.')
+  from lib.fivetran_helper import list_connectors
+  list_connectors()
+
+fivetran-list-columns connector-name table-name:
+  #! /workspace/.python/3.11/bin/python
+  import sys
+  sys.path.append('.')
+  from lib.fivetran_helper import get_table_columns
+  get_table_columns("{{connector-name}}", "{{table-name}}")
+
+fivetran-get-schema connector-name:
+  #! /workspace/.python/3.11/bin/python
+  import sys
+  sys.path.append('.')
+  from lib.fivetran_helper import get_connector_schema
+  get_connector_schema("{{connector-name}}")
+
+fivetran-get-schema-raw connector-name:
+  #! /workspace/.python/3.11/bin/python
+  import sys
+  sys.path.append('.')
+  from lib.fivetran_helper import get_connector_schema_raw
+  get_connector_schema_raw("{{connector-name}}")
+
+set dotenv-load
+# set dotenv-required
+
+test:
+  echo "ABC=${ABC}"

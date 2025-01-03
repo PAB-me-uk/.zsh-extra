@@ -25,7 +25,7 @@ alias gmm="gfq && git merge origin/main"
 alias gclean="git clean -i -fdx"
 alias grebasemain="git rebase -i origin/main"
 alias gforcepush="git push origin \$(git rev-parse --abbrev-ref HEAD) --force"
-alias gprunebranches='git fetch --prune && git branch -vv | grep ": gone]" | awk "{print \$1}" | xargs -r git branch -d'
+alias gprunebranches='git fetch --prune && git branch -vv | grep ": gone]" | awk "{print \$1}" | xargs -r git branch -D'
 
 
 function ga() {

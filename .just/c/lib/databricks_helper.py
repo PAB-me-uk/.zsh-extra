@@ -20,15 +20,24 @@ def get_workspace_client(profile=DATABRICKS_PROFILE):
     return WorkspaceClient(profile=profile)
 
 
-@lru_cache()
-def load_databricks_configuration():
-    return yaml.load(open(os.path.join(REPO_DIRECTORY, "databricks.yml")), Loader=yaml.SafeLoader)
+def list_jobs(profile=DATABRICKS_PROFILE):
+    workspace_client = get_workspace_client(profile=profile)
+    return workspace_client.jobs.list()
 
 
 def get_schema_prefix(profile=DATABRICKS_PROFILE):
     workspace_client = get_workspace_client(profile)
     name = workspace_client.current_user.me().name
     return f"{name.given_name[0]}_{name.family_name}_".lower()
+
+
+next(list_jobs())
+# %%
+
+
+@lru_cache()
+def load_databricks_configuration():
+    return yaml.load(open(os.path.join(REPO_DIRECTORY, "databricks.yml")), Loader=yaml.SafeLoader)
 
 
 def get_catalog_identifier(region):

@@ -106,6 +106,11 @@ function gdeletetag() {
   git push origin --delete "$1"
 }
 
+function gtag() {
+  git tag -a $1 -m "Version $1"
+  git push origin $1
+}
+
 function testing() {
   git commit -m "$1"
 }

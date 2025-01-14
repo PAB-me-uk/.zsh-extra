@@ -3,17 +3,17 @@
 
 workspace-path := "/workspace"
 terraform-log-level := "INFO"
-aws-profile := "calypso-dev-na"
+# aws-profile := "calypso-dev-na"
 terragrunt-flags := "--terragrunt-non-interactive --terragrunt-no-color"
 terrform-state-bucket := "nonprod-terraform-state-a3kgzd7g"
 plugin-cache-dir := "/home/dev/terraform.d/plugin-cache"
 repo-parent-dir := "/workspace/calypso"
 self := "just --justfile '" + justfile() + "'"
 
-export AWS_PROFILE := aws-profile
+# export AWS_PROFILE := aws-profile
 export TF_CLI_ARGS := "-no-color"
 export TF_PLUGIN_CACHE_DIR := plugin-cache-dir
-export DATABRICKS_CONFIG_PROFILE := "default"
+# export DATABRICKS_CONFIG_PROFILE := "default"
 # export TF_PLUGIN_CACHE_MAY_BREAK_DEPENDENCY_LOCK_FILE := "0"
 
 # Default recipe, runs if you just type `just`.
@@ -123,7 +123,13 @@ tf-create-module name:
 
 # AWS SSO login
 aws-sso-login:
-  aws sso login
+  #! /bin/bash
+  if [ -z "$AWS_PROFILE" ]; then
+    echo "AWS_PROFILE is not set, exiting."
+    echo "Command: export AWS_PROFILE=calypso-?-?"
+    exit 1
+  fi
+  aws sso login --profile ${AWS_PROFILE}
 
 # AWS SSO login
 azure-sso-login:
@@ -349,14 +355,18 @@ sql-file-prepare-internal sql-file:
 [no-cd, private]
 databricks-execute-job-by-name-internal region job-name:
   #! /bin/bash
-  set -eox pipefail
+  set -eo pipefail
   echo "Job Name: {{job-name}}"
   if [ -z "{{job-name}}" ]; then
     echo "Variable job-name is empty, exiting."
     exit 1
   fi
-  job_id=$(databricks jobs list --name '{{job-name}}_{{region}}' --target 'personal_dev_{{region}}' --profile 'default-{{region}}' | awk '{print $1}')
+  job_id=$(databricks jobs list --name '{{job-name}}' --target 'personal_dev_{{region}}' --profile 'default-{{region}}' | awk '{print $1}')
   echo "JobID: ${job_id}"
+  if [ -z "${job_id}" ]; then
+    echo "Failed to identify job id, exiting."
+    exit 1
+  fi
   databricks jobs run-now --timeout 2h --target personal_dev_{{region}} --profile default-{{region}} ${job_id}
 
 [no-cd, private]
@@ -367,7 +377,7 @@ sql-file-execute region:
   {{self}} sql-file-execute-internal {{region}} "$({{self}} sql-file-fzf)"
 
 [no-cd, private]
-databricks-execute-job-by-name region job-name: (databricks-bundle region) (databricks-execute-job-by-name-internal region job-name)
+databricks-execute-job-by-name region job-name: (databricks-execute-job-by-name-internal region job-name) # (databricks-bundle region)
   echo "Job Name (final): {{job-name}}"
 
 [no-cd]
@@ -389,12 +399,43 @@ databricks-ls region extra:
   databricks fs ls --target personal_dev_{{region}} --profile default-{{region}} dbfs:/{{extra}}
 
 # fivetran-list-groups: (fivetran-api-get "groups")
-fivetran-list-connectors:
+fivetran-connectors:
   #! /workspace/.python/3.11/bin/python
   import sys
   sys.path.append('.')
-  from lib.fivetran_helper import list_connectors
-  list_connectors()
+  from lib.fivetran_helper import print_connector_list
+  print_connector_list()
+
+fivetran-connectors-json:
+  #! /workspace/.python/3.11/bin/python
+  import sys
+  import json
+  sys.path.append('.')
+  from lib.fivetran_helper import get_connector_list
+  print(json.dumps(get_connector_list(), indent=2))
+
+fivetran-destinations-json:
+  #! /workspace/.python/3.11/bin/python
+  import sys
+  import json
+  sys.path.append('.')
+  from lib.fivetran_helper import get_destination_list
+  print(json.dumps(get_destination_list(), indent=2))
+
+fivetran-schema connector-name:
+  #! /workspace/.python/3.11/bin/python
+  import sys
+  sys.path.append('.')
+  from lib.fivetran_helper import print_connector_schema
+  print_connector_schema("{{connector-name}}")
+
+fivetran-schema-json connector-name:
+  #! /workspace/.python/3.11/bin/python
+  import sys
+  import json
+  sys.path.append('.')
+  from lib.fivetran_helper import get_connector_schema
+  print(json.dumps(get_connector_schema("{{connector-name}}"), indent=2)))
 
 fivetran-list-columns connector-name table-name:
   #! /workspace/.python/3.11/bin/python
@@ -403,19 +444,20 @@ fivetran-list-columns connector-name table-name:
   from lib.fivetran_helper import get_table_columns
   get_table_columns("{{connector-name}}", "{{table-name}}")
 
-fivetran-get-schema connector-name:
+# fivetran-list-groups: (fivetran-api-get "groups")
+fivetran-dump-raw:
   #! /workspace/.python/3.11/bin/python
   import sys
   sys.path.append('.')
-  from lib.fivetran_helper import get_connector_schema
-  get_connector_schema("{{connector-name}}")
+  from lib.fivetran_helper import dump_raw
+  dump_raw('{{workspace-path}}/fivetran/raw/')
 
-fivetran-get-schema-raw connector-name:
+fivetran-dump:
   #! /workspace/.python/3.11/bin/python
   import sys
   sys.path.append('.')
-  from lib.fivetran_helper import get_connector_schema_raw
-  get_connector_schema_raw("{{connector-name}}")
+  from lib.fivetran_helper import dump
+  dump('{{workspace-path}}/fivetran/')
 
 set dotenv-load
 # set dotenv-required

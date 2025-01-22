@@ -44,6 +44,10 @@ def get_connector(connector_id):
     return api_get(f"connectors/{connector_id}")
 
 
+def get_connector_state(connector_id):
+    return api_get(f"connectors/{connector_id}/state")
+
+
 def get_connector_schema(connector_id, log=True):
     # connector_id = get_connector_id(connector_name)
     return api_get(f"connectors/{connector_id}/schemas")
@@ -199,6 +203,16 @@ def dump(output_directory):
                 "w",
             ) as f:
                 f.write(json.dumps(connector, indent=2))
+
+
+def dump_state(output_directory):
+    Path(path.join(output_directory, "all")).mkdir(parents=True, exist_ok=True)
+    Path(path.join(output_directory, "state")).mkdir(parents=True, exist_ok=True)
+
+    state = {item["id"]: get_connector_state(item["id"]) for item in get_connector_list()["items"]}
+
+    with open(path.join(output_directory, "state", f"state.json"), "w") as f:
+        f.write(json.dumps(state, indent=2))
 
 
 def filter_disabled(item):

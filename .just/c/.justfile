@@ -13,7 +13,7 @@ self := "just --justfile '" + justfile() + "'"
 # export AWS_PROFILE := aws-profile
 export TF_CLI_ARGS := "-no-color"
 export TF_PLUGIN_CACHE_DIR := plugin-cache-dir
-# export DATABRICKS_CONFIG_PROFILE := "default"
+export DATABRICKS_CONFIG_PROFILE := "default"
 # export TF_PLUGIN_CACHE_MAY_BREAK_DEPENDENCY_LOCK_FILE := "0"
 
 # Default recipe, runs if you just type `just`.
@@ -253,7 +253,7 @@ execute-sql sql_statement region profile warehouse-id:
   jq . 'sql-execution-response.json'
   statement_id=$(jq -r .statement_id 'sql-execution-response.json')
   echo "Statement ID: ${statement_id}"
-  c check-sql statement_id {{region}}
+  # {{self}} check-sql ${statement_id} {{region}}
 
 # Execute SQL statement (c execute-sql-as-runner "$(cat | tr '\n' ' ')" for multiline paste the CTRL+D)
 
@@ -458,6 +458,13 @@ fivetran-dump:
   sys.path.append('.')
   from lib.fivetran_helper import dump
   dump('{{workspace-path}}/fivetran/')
+
+fivetran-dump-state:
+  #! /workspace/.python/3.11/bin/python
+  import sys
+  sys.path.append('.')
+  from lib.fivetran_helper import dump_state
+  dump_state('{{workspace-path}}/fivetran/')
 
 set dotenv-load
 # set dotenv-required

@@ -237,6 +237,7 @@ tg-dev-plan-exe:
 #   /workspace/terragrunt-original/terragrunt
 default-profile := "workspace-primary-dev-na"
 default-databricks-warehouse-id-us := "0df16878fb746ed5" # primary-serverless-dev-na (ID: 0df16878fb746ed5)
+default-databricks-warehouse-id-us-prod := "b4f6bf1ebafcdf8f" # primary-serverless-prodna
 default-databricks-warehouse-id-eu := "e5665095820b5883"
 
 [no-cd]
@@ -258,6 +259,7 @@ execute-sql sql_statement region profile warehouse-id:
 # Execute SQL statement (c execute-sql-as-runner "$(cat | tr '\n' ' ')" for multiline paste the CTRL+D)
 
 execute-sql-as-runner-us sql_statement: (execute-sql sql_statement "na" "workspace-primary-dev-na-sp-dev-na-runner" default-databricks-warehouse-id-us)
+execute-sql-as-runner-us-prod sql_statement: (execute-sql sql_statement "na" "workspace-primary-prod-na-prodna-na-runner" default-databricks-warehouse-id-us-prod)
 execute-sql-as-runner-eu sql_statement: (execute-sql sql_statement "eu" "workspace-primary-dev-eu-sp-dev-eu-runner" default-databricks-warehouse-id-eu)
 
 [no-cd]

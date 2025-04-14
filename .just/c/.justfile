@@ -5,7 +5,7 @@ workspace-path := "/workspace"
 terraform-log-level := "INFO"
 # aws-profile := "calypso-dev-na"
 terragrunt-flags := "--terragrunt-non-interactive --terragrunt-no-color"
-terrform-state-bucket := "nonprod-terraform-state-a3kgzd7g"
+terraform-state-bucket := "nonprod-terraform-state-a3kgzd7g"
 plugin-cache-dir := "/home/dev/terraform.d/plugin-cache"
 repo-parent-dir := "/workspace/calypso"
 self := "just --justfile '" + justfile() + "'"
@@ -82,11 +82,11 @@ tf-state-get:
   cd /workspace
   rm -rf /workspace/tf-state
   mkdir -p /workspace/tf-state
-  aws s3 cp --recursive s3://{{terrform-state-bucket}} /workspace/tf-state
+  aws s3 cp --recursive s3://{{terraform-state-bucket}} /workspace/tf-state
 
 # Terrafform - List all state files in S3 bucket
 tf-state-list:
-  aws s3 ls s3://{{terrform-state-bucket}} --recursive
+  aws s3 ls s3://{{terraform-state-bucket}} --recursive
 
 # Terragrunt - Clean terragrunt cache
 tg-clean:

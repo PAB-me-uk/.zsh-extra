@@ -4,11 +4,20 @@ import os
 from copy import deepcopy
 from functools import lru_cache
 
+import git
 import yaml
 from databricks.sdk import WorkspaceClient
 
-REPO_DIRECTORY = "/workspace/internal-reporting-pipelines"
+
+def get_git_root():
+    git_repo = git.Repo(os.curdir, search_parent_directories=True)
+    git_root = git_repo.git.rev_parse("--show-toplevel")
+    return git_root
+
+
+REPO_DIRECTORY = get_git_root()
 RESOURCES_DIRECTORY = f"{REPO_DIRECTORY}/resources"
+SQL_DIRECTORY = f"{REPO_DIRECTORY}/sql"
 LEN_RESOURCES_DIRECTORY = len(RESOURCES_DIRECTORY)
 TEMP_JOB_DIRECTORY = os.path.join(RESOURCES_DIRECTORY, "_temp_")
 TARGET_PREFIX = "personal_dev"
@@ -37,9 +46,7 @@ def get_schema_prefix(profile=DATABRICKS_PROFILE):
 
 @lru_cache()
 def load_databricks_configuration():
-    return yaml.load(
-        open(os.path.join(RESOURCES_DIRECTORY, "databricks.yml")), Loader=yaml.SafeLoader
-    )
+    return yaml.load(open(os.path.join(RESOURCES_DIRECTORY, "databricks.yml")), Loader=yaml.SafeLoader)
 
 
 # def get_catalog_identifier(target):
@@ -127,7 +134,7 @@ def inject_parameters_into_sql_file(target, sql_file):
     # parameters = find_parameters_for_sql_task(target, sql_file)
     parameters = {"schema_prefix": "paul_burridge_", "catalog_prefix": "rpt_"}
     output = ["%sql\n"]
-    with open(os.path.join(RESOURCES_DIRECTORY, sql_file)) as file:
+    with open(os.path.join(SQL_DIRECTORY, sql_file)) as file:
         while line := file.readline():
             if "{" in line:
                 new_line = (

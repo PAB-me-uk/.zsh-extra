@@ -26,7 +26,16 @@ pwd:
 # Compile all Python requirement files.
 [no-cd]
 pip-compile-all:
-  find . -name "requirements.in" -not -path "**/submodules/*" -exec bash -c 'dir=$(dirname {}); pip-compile --annotation-style=line --resolver=backtracking --generate-hashes --allow-unsafe --output-file="${dir}/requirements.txt" "${dir}/requirements.in"' \;
+  #! /bin/bash
+  set -euo pipefail
+  find . -name "requirements.in" -not -path "**/submodules/*" -exec bash -c 'dir=$(dirname {}); pip-compile --annotation-style=line --resolver=backtracking --generate-hashes --allow-unsafe --strip-extras --output-file="${dir}/requirements.txt" "${dir}/requirements.in"' \;
+
+# Compile all Python requirement files.
+[no-cd]
+echo-pip-compile-all:
+  #! /bin/bash
+  set -euo pipefail
+  find . -name "requirements.in" -not -path "**/submodules/*" -exec bash -c 'dir=$(dirname {}); echo pip-compile --annotation-style=line --resolver=backtracking --generate-hashes --allow-unsafe --strip-extras --output-file="${dir}/requirements.txt" "${dir}/requirements.in"' \;
 
 ## AWS Related ##
 

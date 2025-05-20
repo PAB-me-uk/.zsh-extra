@@ -26,7 +26,7 @@ alias gclean="git clean -i -fdx"
 alias grebasemain="git rebase -i origin/main"
 alias gforcepush="git push origin \$(git rev-parse --abbrev-ref HEAD) --force"
 alias gprunebranches='git fetch --prune && git branch -vv | grep ": gone]" | awk "{print \$1}" | xargs -r git branch -D'
-
+alias gwtls='git worktree list'
 
 function ga() {
   git add $@ && \
@@ -96,6 +96,20 @@ function gr() {
   gs
 }
 
+function grm() {
+  selected=$(git ls-files --others --exclude-standard | sort | fzf)
+  echo rm -i "${selected}"
+  rm -i "${selected}"
+  gs
+}
+
+function gan() {
+  selected=$(git ls-files --others --exclude-standard | sort | fzf)
+  echo git add "${selected}"
+  git add "${selected}"
+  gs
+}
+
 function gdeletebranch() {
   git push --delete origin $1 && \
   git branch -D $1
@@ -111,6 +125,15 @@ function gtag() {
   git push origin $1
 }
 
+function gwt() {
+  git worktree add ../$1 $1
+}
+
+function gwtrm() {
+  git worktree remove $1 --force
+}
+
 function testing() {
   git commit -m "$1"
 }
+

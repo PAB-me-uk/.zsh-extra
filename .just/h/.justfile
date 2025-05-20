@@ -57,10 +57,11 @@ tg-run-all command log-level=terraform-log-level extra-args="":
   export TF_LOG={{log-level}}
   export TERRAGRUNT_LOG_LEVEL={{log-level}}
   if [[ "{{log-level}}" == "DEBUG" ]]; then
-    time terragrunt {{terragrunt-flags}} run-all {{command}} --terragrunt-debug
+    time terragrunt {{terragrunt-flags}} run-all {{command}} --terragrunt-debug 2>&1 | tee /tmp/tg-output.txt
   else
-    time terragrunt {{terragrunt-flags}} run-all {{command}} {{extra-args}}
+    time terragrunt {{terragrunt-flags}} run-all {{command}} {{extra-args}} 2>&1 | tee /tmp/tg-output.txt
   fi
+  code /tmp/tg-output.txt
 
 # Terragrunt - Console with plan
 tg-console-with-plan: (tg "console" terraform-log-level "-plan")
@@ -157,7 +158,7 @@ install:
   sudo apt install temurin-11-jdk -y
   sudo apt autoremove -y
 
-[private]
+[private,no-cd]
 sql-file-fzf:
   #! /bin/bash
   last_select_store_file="  "
@@ -165,7 +166,8 @@ sql-file-fzf:
   if [ -f "${last_select_store_file}" ]; then
     last_selected=$(cat "${last_select_store_file}")
   fi
-  selected=$(find {{repo-parent-dir}}/internal-reporting-pipelines/sql -name "*.sql" | sort | fzf --query="$last_selected")
+  cd $(git rev-parse --show-toplevel)/sql
+  selected=$(find . -name "*.sql" | sort | fzf --query="$last_selected")
   echo "${selected}" > "${last_select_store_file}"
   echo "${selected}"
 
@@ -177,8 +179,11 @@ sql-file-fzf:
 databricks-bundle command='deploy':
   #! /bin/bash
   unset "${!ARM_@}" # Fix Error: validate: more than one authorization method configured: azure and oauth.
-  cd /workspace/internal-reporting-pipelines/resources
-  databricks bundle {{command}} --target personal_dev --profile {{default-databricks-profile}} --auto-approve
+  cd $(git rev-parse --show-toplevel)/resources
+  flag="--auto-approve"
+  if [[ "{{command}}" == 'validate'  ]]; then flag=""; fi
+  set -x
+  databricks bundle {{command}} --target personal_dev --profile {{default-databricks-profile}} ${flag}
 
 default-databricks-warehouse-id := "95c8d9ccb931f33c"
 
@@ -187,7 +192,7 @@ databricks-execute-sql sql_statement target profile warehouse-id:
   #! /bin/bash
   set -eox pipefail
   unset "${!ARM_@}" # Fix Error: validate: more than one authorization method configured: azure and oauth.
-  cd /workspace/internal-reporting-pipelines/resources
+  cd $(git rev-parse --show-toplevel)/resources
   databricks api post "/api/2.0/sql/statements" \
   --target {{target}} \
   --profile {{profile}} \
@@ -204,7 +209,7 @@ databricks-check-sql statement_id target profile:
   #! /bin/bash
   set -eo pipefail
   unset "${!ARM_@}" # Fix Error: validate: more than one authorization method configured: azure and oauth.
-  cd /workspace/internal-reporting-pipelines/resources
+  cd $(git rev-parse --show-toplevel)/resources
   while :; do
     state=$(databricks api get "/api/2.0/sql/statements/{{statement_id}}" --target {{target}} --profile {{profile}} | jq .status.state)
     echo "State: ${state}"
@@ -220,7 +225,7 @@ databricks-get-schema-prefix target='personal_dev':
   #! /bin/bash
   set -eo pipefail
   unset "${!ARM_@}" # Fix Error: validate: more than one authorization method configured: azure and oauth.
-  cd /workspace/internal-reporting-pipelines/resources
+  cd $(git rev-parse --show-toplevel)/resources
   user=$(databricks current-user me --target {{target}} --profile {{default-databricks-profile}})
   surname=$(echo ${user} | jq -r .name.familyName | tr '[:upper:]' '[:lower:]')
   forename=$(echo ${user} | jq -r .name.givenName | tr '[:upper:]' '[:lower:]')
@@ -236,6 +241,9 @@ databricks-check-sql-as-fivetran-connector-sp statement_id: (databricks-check-sq
 
 databricks-execute-sql-as-hummingbird-sp-prd sql_statement: (databricks-execute-sql sql_statement "reporting" "reporting-as-hummingbird-sp-prd" default-databricks-warehouse-id)
 databricks-check-sql-as-hummingbird-sp-prd statement_id: (databricks-check-sql statement_id "reporting" "reporting-as-hummingbird-sp-prd")
+
+databricks-execute-sql-as-job-runner-sp-rpta sql_statement: (databricks-execute-sql sql_statement "reporting" "reporting-as-job-runner-sp-rpta" default-databricks-warehouse-id)
+databricks-check-sql-as-job-runner-sp-rpta statement_id: (databricks-check-sql statement_id "reporting" "reporting-as-job-runner-sp-rpta")
 
 
 ### Job execution
@@ -280,18 +288,34 @@ databricks-execute-job target=default-databricks-target:
 
 ### SQL File
 
+[no-cd]
 sql-file-inject-parameters target sql-file:
   #! /workspace/.python/3.11/bin/python
   import sys
-  sys.path.append('.')
+  sys.path.append('{{justfile_directory()}}')
   from lib.databricks_helper import inject_parameters_into_sql_file
   inject_parameters_into_sql_file('{{target}}', '{{sql-file}}')
 
+[no-cd]
 sql-file-inject-parameters-to-clipboard target=default-databricks-target:
+  pwd
   {{self}} sql-file-inject-parameters "{{target}}" "$({{self}} sql-file-fzf)" | xclip -selection clipboard
 
 ### MISC
 
+debug-paths:
+  echo pwd: $(pwd)
+  echo invocation_directory: {{invocation_directory()}}
+  echo justfile: {{justfile()}}
+  echo justfile_directory: {{justfile_directory()}}
+  env
+
+indirect-debug-paths:
+  {{self}} debug-paths
+
+[no-cd]
+indirect-debug-paths-no-cd:
+  {{self}} debug-paths
 
 set dotenv-load
 # set dotenv-required

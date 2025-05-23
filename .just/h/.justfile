@@ -286,6 +286,20 @@ databricks-execute-job-by-name job-name target: (databricks-execute-job-by-name-
 databricks-execute-job target=default-databricks-target:
   {{self}} databricks-execute-job-by-name "$({{self}} databricks-jobs-fzf {{target}})" "{{target}}"
 
+### Databricks App
+
+databricks-app-watch-files-and-sync:
+  #! /bin/bash
+  set -eo pipefail
+  unset "${!ARM_@}"
+  databricks sync --watch /workspace/internal-reporting-pipelines/apps/paul-app-test /Workspace/Users/paul.burridge@colibridigital.io/databricks_apps/paul-app-test_2025_05_21-10_20/dash-data-app --profile {{default-databricks-profile}}
+
+databricks-app-deploy:
+  #! /bin/bash
+  set -eo pipefail
+  unset "${!ARM_@}"
+  databricks apps deploy paul-app-test --source-code-path /Workspace/Users/paul.burridge@colibridigital.io/databricks_apps/paul-app-test_2025_05_21-10_20/dash-data-app --profile {{default-databricks-profile}}
+
 ### SQL File
 
 [no-cd]
